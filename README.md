@@ -1,6 +1,24 @@
 # Activity Monitor - Windows Application
 
-A lightweight Windows application that monitors user activity through window focus tracking, idle detection, and intelligent screen capture with AI-powered activity analysis using Qwen2.5-VL.
+<p align="center">
+  <img src="https://img.shields.io/badge/Windows-0078D4?style=for-the-badge&logo=windows&logoColor=white" alt="Windows"/>
+  <img src="https://img.shields.io/badge/.NET-512BD4?style=for-the-badge&logo=dotnet&logoColor=white" alt=".NET"/>
+  <img src="https://img.shields.io/badge/SQLite-003B57?style=for-the-badge&logo=sqlite&logoColor=white" alt="SQLite"/>
+  <img src="https://img.shields.io/badge/Ollama-000000?style=for-the-badge&logo=ollama&logoColor=white" alt="Ollama"/>
+  <img src="https://img.shields.io/badge/AI-FF6B35?style=for-the-badge&logo=openai&logoColor=white" alt="AI"/>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Activity_Monitor-🖥️-blue?style=flat-square" alt="Activity Monitor"/>
+  <img src="https://img.shields.io/badge/Screen_Capture-📸-green?style=flat-square" alt="Screen Capture"/>
+  <img src="https://img.shields.io/badge/CLI_Tools-💻-purple?style=flat-square" alt="CLI Tools"/>
+  <img src="https://img.shields.io/badge/AI_Analysis-🤖-orange?style=flat-square" alt="AI Analysis"/>
+  <img src="https://img.shields.io/badge/Privacy_Focused-🔒-red?style=flat-square" alt="Privacy Focused"/>
+</p>
+
+---
+
+🖥️ **Activity Monitor** is a lightweight Windows application that monitors user activity through window focus tracking, idle detection, and intelligent screen capture with AI-powered activity analysis using Qwen2.5-VL.
 
 ## Features
 
@@ -171,6 +189,8 @@ publish\ActivityMonitor.CLI.exe stats --date 2024-01-15
 # Export activity report to JSON
 publish\ActivityMonitor.CLI.exe report --date 2024-01-15 --output report.json
 
+Exports comprehensive activity data including time summaries, application usage, AI insights, and timeline segments for external analysis.
+
 # Query activities with custom filters
 publish\ActivityMonitor.CLI.exe query --start-date 2024-01-15 --end-date 2024-01-16 --process "chrome.exe"
 ```
@@ -183,6 +203,38 @@ publish\ActivityMonitor.CLI.exe query --start-date 2024-01-15 --end-date 2024-01
 - `--process`: Filter by process name
 - `--output`: Output file path for report export
 - `--help`: Show help for each command
+
+## JSON Report Export
+
+The `report` command generates comprehensive JSON reports containing:
+
+- **Time Tracking**: Total active/idle time breakdowns
+- **Application Usage**: Per-application time spent with window details
+- **AI Activity Analysis**: Content types, topics, and summaries for each activity
+- **Timeline Data**: Chronological segments with precise timestamps
+- **Content Categories**: Activity breakdown by type (coding, browsing, documents, etc.)
+
+**Example Report Structure:**
+```json
+{
+  "generatedAtUtc": "2024-01-15T20:30:00Z",
+  "totalActiveTimeFormatted": "6h 45m 22s",
+  "totalIdleTimeFormatted": "1h 44m 53s",
+  "applications": [
+    {
+      "processName": "Visual Studio Code",
+      "totalActiveSeconds": 14520,
+      "activeTimeFormatted": "4h 2m 0s",
+      "insights": [...]
+    }
+  ],
+  "detailedActivities": [...],
+  "contentTypeBreakdown": [...],
+  "segments": [...]
+}
+```
+
+Use these reports for productivity analysis, time tracking, or integration with other tools.
 
 ## Privacy & Security
 

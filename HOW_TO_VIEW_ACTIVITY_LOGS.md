@@ -182,10 +182,34 @@ ActivityMonitor.CLI.exe detailed --date 2024-01-15 --limit 500 > detailed_activi
 
 ### Export JSON Report (New!)
 ```cmd
-ActivityMonitor.CLI.exe report --date 2024-01-15 --output activity_report.json
+ActivityMonitor.CLI.exe report --date 2024-01-15 --output report.json
 ```
 
-The JSON export includes all activity data in structured format for external analysis tools.
+The JSON export creates a comprehensive activity report containing:
+
+- **Time Summary**: Total tracked time, active time, and idle time
+- **Application Usage**: Detailed breakdown by application with time spent per window
+- **Activity Insights**: All AI-analyzed activities with content types, topics, and summaries
+- **Content Categories**: Breakdown by activity type (coding, browsing, documents, etc.)
+- **Timeline Segments**: Chronological timeline with precise start/end times
+
+**Report Structure:**
+```json
+{
+  "generatedAtUtc": "2024-01-15T20:30:00Z",
+  "rangeStartLocal": "2024-01-15T00:00:00",
+  "rangeEndLocal": "2024-01-15T23:59:59",
+  "totalTrackedTimeFormatted": "8h 30m 15s",
+  "totalActiveTimeFormatted": "6h 45m 22s",
+  "totalIdleTimeFormatted": "1h 44m 53s",
+  "applications": [...],
+  "detailedActivities": [...],
+  "contentTypeBreakdown": [...],
+  "segments": [...]
+}
+```
+
+Use this for data analysis, reporting, or integration with other tools.
 
 ## Filtering Tips
 

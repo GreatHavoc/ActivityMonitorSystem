@@ -221,11 +221,11 @@ ActivityMonitor.CLI.exe detailed --date 2024-01-15 --limit 10
 REM Daily summary
 ActivityMonitor.CLI.exe summary --date 2024-01-15
 
-REM Export report
+# Export report
 ActivityMonitor.CLI.exe report --date 2024-01-15 --output test_report.json
 ```
 
-## Troubleshooting
+## Verification Checklist
 
 ### Issue: "Dll was not found" error
 

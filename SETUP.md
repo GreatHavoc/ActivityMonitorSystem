@@ -121,8 +121,11 @@ ActivityMonitor.CLI.exe stats --date 2024-01-15
 # Export activity report to JSON
 ActivityMonitor.CLI.exe report --date 2024-01-15 --output report.json
 
+# Export activity report to JSON
+publish\ActivityMonitor.CLI.exe report --date 2024-01-15 --output report.json
+
 # Query activities with custom filters
-ActivityMonitor.CLI.exe query --start-date 2024-01-15 --end-date 2024-01-16 --process "chrome.exe"
+publish\ActivityMonitor.CLI.exe query --start-date 2024-01-15 --end-date 2024-01-16 --process "chrome.exe"
 ```
 
 ### CLI Options
@@ -133,6 +136,18 @@ ActivityMonitor.CLI.exe query --start-date 2024-01-15 --end-date 2024-01-16 --pr
 - `--process`: Filter by process name
 - `--output`: Output file path for report export
 - `--help`: Show help for each command
+
+## JSON Report Export
+
+The `report` command generates detailed JSON reports for comprehensive activity analysis:
+
+- **Time summaries** with active/idle breakdowns
+- **Per-application usage** with window-level details
+- **AI-powered activity insights** including content types and topics
+- **Timeline segments** with precise timestamps
+- **Content type categorization** for productivity analysis
+
+Reports are saved to the specified output path and can be used for external analysis tools or custom reporting.
 
 ## Troubleshooting
 
