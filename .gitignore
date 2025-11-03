@@ -1,0 +1,52 @@
+# .NET
+bin/
+obj/
+publish/
+*.user
+*.suo
+*.userprefs
+.vs/
+.vscode/
+*.nupkg
+packages/
+*.nuget.props
+*.nuget.targets
+
+# Rider
+.idea/
+
+# Logs
+Logs/
+*.log
+
+# Data
+Data/
+*.db
+*.db-shm
+*.db-wal
+
+# Python (vLLM)
+vllm-env/
+__pycache__/
+*.pyc
+.venv/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temp
+*.tmp
+*.temp
+
+# Secrets
+appsettings.local.json
+secrets.json
+*.pfx
+
+# Build artifacts
+*.exe
+*.dll
+*.pdb
+*.deps.json
+*.runtimeconfig.json
