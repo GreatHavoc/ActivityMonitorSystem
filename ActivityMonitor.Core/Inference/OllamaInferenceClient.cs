@@ -10,7 +10,7 @@ using System.Text.Json.Serialization;
 namespace ActivityMonitor.Core.Inference;
 
 /// <summary>
-/// Client for Ollama server with Qwen2.5-VL-3B-Instruct-AWQ model
+/// Client for Ollama server with Qwen3-VL-2B model
 /// Handles multimodal inference requests using Ollama API
 /// </summary>
 public class OllamaInferenceClient
@@ -33,7 +33,7 @@ public class OllamaInferenceClient
     }
 
     /// <summary>
-    /// Analyzes captured frames using Qwen2.5-VL via Ollama
+    /// Analyzes captured frames using Qwen3-VL via Ollama
     /// </summary>
     public async Task<InferenceResult?> AnalyzeFramesAsync(
         List<byte[]> frames, 

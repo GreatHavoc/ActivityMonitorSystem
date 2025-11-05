@@ -6,7 +6,7 @@ public class ActivityMonitorSettings
     public int IdleThresholdSeconds { get; set; } = 300;
     public CaptureSettings CaptureSettings { get; set; } = new();
     public string OllamaEndpoint { get; set; } = "http://localhost:11434";
-    public string OllamaModel { get; set; } = "qwen2.5-vl:3b";
+    public string OllamaModel { get; set; } = "qwen3-vl:2b";
     public QueueSettings QueueSettings { get; set; } = new();
     public StorageSettings Storage { get; set; } = new();
 }

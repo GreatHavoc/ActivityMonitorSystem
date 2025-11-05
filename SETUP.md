@@ -5,7 +5,7 @@
 1. **Windows 10/11 (64-bit)**
 2. **.NET 8.0 SDK or later** - [Download](https://dotnet.microsoft.com/download/dotnet/8.0)
 3. **Ollama** - [Download](https://ollama.ai)
-4. **GPU with 3GB+ VRAM** (recommended for optimal performance)
+4. **GPU with 2GB+ VRAM** (recommended for optimal performance)
 5. **Administrator privileges** - Required for initial setup
 
 ## Quick Start
@@ -34,16 +34,16 @@ Then pull the Qwen2.5-VL model:
 
 ```bash
 # Pull the 3B AWQ quantized model (smaller, faster)
-ollama pull qwen2.5-vl:3b
+ollama pull qwen3-vl:2b
 
 # Verify Ollama is running
 curl http://localhost:11434/api/tags
 
 # Test the model
-ollama run qwen2.5-vl:3b "What can you see?"
+ollama run qwen3-vl:2b "What can you see?"
 ```
 
-**Note**: The 3B AWQ model requires ~2-3GB VRAM and provides excellent performance for real-time analysis.
+**Note**: The 2B model requires ~1-2GB VRAM and provides excellent performance for real-time analysis.
 
 ### 4. Configure Auto-Start
 
@@ -82,7 +82,7 @@ Edit `publish\appsettings.json`:
       "MaxFramesPerCapture": 1
     },
     "OllamaEndpoint": "http://localhost:11434",
-    "OllamaModel": "qwen2.5-vl:3b",
+    "OllamaModel": "qwen3-vl:2b",
     "QueueSettings": {
       "MaxConcurrentTasks": 4,
       "MaxQueueSize": 100,

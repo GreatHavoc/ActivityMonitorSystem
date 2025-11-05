@@ -71,11 +71,27 @@
 
 ## Requirements
 
-- Windows 10/11 (64-bit)
-- .NET 8.0 or later
-- Ollama installed (with GPU support recommended)
-- 6GB+ RAM (for 3B model)
-- Admin privileges for initial setup
+### System Requirements
+- **Windows 10/11 (64-bit)**
+- **4GB+ RAM** (for 2B model)
+- **Admin privileges** for initial setup
+
+### .NET Requirements
+
+#### For Development/Building:
+- **.NET 9.0 SDK** (latest SDK for building the project)
+
+#### For Running Published Applications:
+- **.NET 8.0 Runtime** (target runtime for published executables)
+
+#### Download Links:
+- [.NET 9.0 SDK](https://dotnet.microsoft.com/download/dotnet/9.0) - For development
+- [.NET 8.0 Runtime](https://dotnet.microsoft.com/download/dotnet/8.0) - For running published apps
+
+### AI/ML Requirements
+- **Ollama** installed (with GPU support recommended)
+  - Download: [https://ollama.ai](https://ollama.ai)
+  - Model: `qwen3-vl:2b` (2B optimized vision-language model)
 
 ## Installation
 
@@ -100,7 +116,7 @@ dotnet publish ActivityMonitor.CLI\ActivityMonitor.CLI.csproj -c Release -o publ
 # Install Ollama from https://ollama.ai
 
 # Pull the Qwen2.5-VL model (3B AWQ quantized version)
-ollama pull qwen2.5-vl:3b
+ollama pull qwen3-vl:2b
 
 # Verify Ollama is running (default port 11434)
 curl http://localhost:11434/api/tags
@@ -142,7 +158,7 @@ Edit `publish\appsettings.json`:
       "MaxFramesPerCapture": 1
     },
     "OllamaEndpoint": "http://localhost:11434",
-    "OllamaModel": "qwen2.5-vl:3b",
+    "OllamaModel": "qwen3-vl:2b",
     "QueueSettings": {
       "MaxConcurrentTasks": 4,
       "MaxQueueSize": 100,
