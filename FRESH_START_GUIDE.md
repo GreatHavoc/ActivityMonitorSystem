@@ -29,7 +29,7 @@ ollama --version
 ## Step 3: Pull the AI Model
 
 ```cmd
-ollama pull qwen3-vl:2b
+ollama pull qwen2.5vl:3b
 ```
 
 Wait for download to complete (~2-3GB). Verify:
@@ -38,7 +38,7 @@ Wait for download to complete (~2-3GB). Verify:
 ollama list
 ```
 
-You should see `qwen3-vl:2b` in the list.
+You should see `qwen2.5vl:3b` in the list.
 
 ## Step 4: Clean Build Everything
 
@@ -111,7 +111,7 @@ Make sure it has the current configuration:
       "MaxFramesPerCapture": 1
     },
     "OllamaEndpoint": "http://localhost:11434",
-    "OllamaModel": "qwen3-vl:2b",
+    "OllamaModel": "qwen2.5vl:3b",
     "QueueSettings": {
       "MaxConcurrentTasks": 4,
       "MaxQueueSize": 100,
@@ -238,11 +238,11 @@ Check `ActivityMonitor.Core\ActivityMonitor.Core.csproj` has:
 
 If missing, add it and rebuild.
 
-### Issue: "model 'qwen3-vl:2b' not found"
+### Issue: "model 'qwen2.5vl:3b' not found"
 
 **Solution**:
 ```cmd
-ollama pull qwen3-vl:2b
+ollama pull qwen2.5vl:3b
 ollama list
 ```
 
@@ -284,7 +284,7 @@ After setup, verify:
 
 - [ ] .NET 8.0 SDK installed
 - [ ] Ollama installed and running
-- [ ] Model `qwen3-vl:2b` downloaded
+- [ ] Model `qwen2.5vl:3b` downloaded
 - [ ] All projects build without errors
 - [ ] Service.exe and CLI.exe in publish folder
 - [ ] appsettings.json in publish folder
@@ -346,7 +346,7 @@ if %ERRORLEVEL% NEQ 0 (
 )
 
 echo Step 2: Pulling AI model...
-ollama pull qwen3-vl:2b
+ollama pull qwen2.5vl:3b
 
 echo Step 3: Clean build...
 cd C:\ActivityMonitor

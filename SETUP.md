@@ -34,13 +34,13 @@ Then pull the Qwen2.5-VL model:
 
 ```bash
 # Pull the 3B AWQ quantized model (smaller, faster)
-ollama pull qwen3-vl:2b
+ollama pull qwen2.5vl:3b
 
 # Verify Ollama is running
 curl http://localhost:11434/api/tags
 
 # Test the model
-ollama run qwen3-vl:2b "What can you see?"
+ollama run qwen2.5vl:3b "What can you see?"
 ```
 
 **Note**: The 2B model requires ~1-2GB VRAM and provides excellent performance for real-time analysis.
@@ -82,7 +82,7 @@ Edit `publish\appsettings.json`:
       "MaxFramesPerCapture": 1
     },
     "OllamaEndpoint": "http://localhost:11434",
-    "OllamaModel": "qwen3-vl:2b",
+    "OllamaModel": "qwen2.5vl:3b",
     "QueueSettings": {
       "MaxConcurrentTasks": 4,
       "MaxQueueSize": 100,

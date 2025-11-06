@@ -10,7 +10,7 @@ using System.Text.Json.Serialization;
 namespace ActivityMonitor.Core.Inference;
 
 /// <summary>
-/// Client for Ollama server with Qwen3-VL-2B model
+/// Client for Ollama server with Qwen2.5-VL-3B model
 /// Handles multimodal inference requests using Ollama API
 /// </summary>
 public class OllamaInferenceClient
@@ -33,7 +33,7 @@ public class OllamaInferenceClient
     }
 
     /// <summary>
-    /// Analyzes captured frames using Qwen3-VL via Ollama
+    /// Analyzes captured frames using Qwen2.5-VL via Ollama
     /// </summary>
     public async Task<InferenceResult?> AnalyzeFramesAsync(
         List<byte[]> frames, 
@@ -50,6 +50,7 @@ public class OllamaInferenceClient
                 Prompt = BuildPrompt(),
                 Images = ConvertFramesToBase64(frames),
                 Stream = false,
+                Format = BuildStructuredOutputFormat(),
                 Options = new OllamaOptions
                 {
                     Temperature = 0.1,
@@ -93,17 +94,27 @@ public class OllamaInferenceClient
 
     private string BuildPrompt()
     {
-        return @"Analyze the screen and extract user activity details in JSON:
-{
-  ""activity_label"": ""brief category"",
-  ""application"": ""app name"",
-  ""content_type"": ""code/web/document/video/chat"",
-  ""topic"": ""specific subject"",
-  ""action"": ""reading/writing/browsing"",
-  ""summary"": ""what user is doing"",
-  ""visible_text"": ""key visible text or URLs"",
-  ""confidence"": 0.9
-}";
+        return "Analyze the screen and extract user activity details.";
+    }
+
+    private object BuildStructuredOutputFormat()
+    {
+        return new
+        {
+            type = "object",
+            properties = new
+            {
+                activity_label = new { type = "string" },
+                application = new { type = "string" },
+                content_type = new { type = "string", @enum = new[] { "code", "web", "document", "video", "chat", "email", "image", "other" } },
+                topic = new { type = "string" },
+                action = new { type = "string", @enum = new[] { "reading", "writing", "browsing", "coding", "editing", "watching", "chatting", "searching", "other" } },
+                summary = new { type = "string" },
+                visible_text = new { type = "string" },
+                confidence = new { type = "number", minimum = 0.0, maximum = 1.0 }
+            },
+            required = new[] { "activity_label", "summary", "confidence", "application", "content_type", "topic", "action", "visible_text" }
+        };
     }
 
     private List<string> ConvertFramesToBase64(List<byte[]> frames)
@@ -128,30 +139,27 @@ public class OllamaInferenceClient
     {
         try
         {
-            // Try to extract JSON from the response
-            // Ollama may wrap JSON in markdown code blocks
-            var jsonContent = ExtractJson(content);
-
-            var jsonDoc = JsonDocument.Parse(jsonContent);
+            // With structured output, content should be valid JSON
+            var jsonDoc = JsonDocument.Parse(content);
             var root = jsonDoc.RootElement;
 
             return new InferenceResult
             {
                 ProcessedAt = DateTime.UtcNow,
                 ActivityLabel = root.GetProperty("activity_label").GetString() ?? "Unknown",
-                Application = root.TryGetProperty("application", out var app) ? app.GetString() ?? "" : "",
-                ContentType = root.TryGetProperty("content_type", out var ct) ? ct.GetString() ?? "" : "",
-                Topic = root.TryGetProperty("topic", out var topic) ? topic.GetString() ?? "" : "",
-                Action = root.TryGetProperty("action", out var action) ? action.GetString() ?? "" : "",
+                Application = root.GetProperty("application").GetString() ?? "",
+                ContentType = root.GetProperty("content_type").GetString() ?? "",
+                Topic = root.GetProperty("topic").GetString() ?? "",
+                Action = root.GetProperty("action").GetString() ?? "",
                 Summary = root.GetProperty("summary").GetString() ?? "",
-                VisibleText = root.TryGetProperty("visible_text", out var vt) ? vt.GetString() ?? "" : "",
+                VisibleText = root.GetProperty("visible_text").GetString() ?? "",
                 Confidence = root.TryGetProperty("confidence", out var conf) ? conf.GetDouble() : 0.0,
                 RawResponse = content
             };
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to parse JSON response, using raw content");
+            _logger.LogError(ex, "Failed to parse structured JSON response");
             
             // Fallback: use the raw content as summary
             return new InferenceResult
@@ -163,42 +171,6 @@ public class OllamaInferenceClient
                 RawResponse = content
             };
         }
-    }
-
-    private string ExtractJson(string content)
-    {
-        // Remove markdown code blocks if present
-        var trimmed = content.Trim();
-        
-        if (trimmed.StartsWith("```json"))
-        {
-            var startIndex = trimmed.IndexOf('\n') + 1;
-            var endIndex = trimmed.LastIndexOf("```");
-            if (startIndex > 0 && endIndex > startIndex)
-            {
-                return trimmed.Substring(startIndex, endIndex - startIndex).Trim();
-            }
-        }
-        else if (trimmed.StartsWith("```"))
-        {
-            var startIndex = trimmed.IndexOf('\n') + 1;
-            var endIndex = trimmed.LastIndexOf("```");
-            if (startIndex > 0 && endIndex > startIndex)
-            {
-                return trimmed.Substring(startIndex, endIndex - startIndex).Trim();
-            }
-        }
-
-        // Try to find JSON object boundaries
-        var jsonStart = trimmed.IndexOf('{');
-        var jsonEnd = trimmed.LastIndexOf('}');
-        
-        if (jsonStart >= 0 && jsonEnd > jsonStart)
-        {
-            return trimmed.Substring(jsonStart, jsonEnd - jsonStart + 1);
-        }
-
-        return trimmed;
     }
 
     /// <summary>
@@ -258,6 +230,9 @@ public class OllamaGenerateRequest
 
     [JsonPropertyName("stream")]
     public bool Stream { get; set; } = false;
+
+    [JsonPropertyName("format")]
+    public object? Format { get; set; }
 
     [JsonPropertyName("options")]
     public OllamaOptions? Options { get; set; }

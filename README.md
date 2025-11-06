@@ -24,7 +24,7 @@
 
 - **Activity Tracking**: Monitors active window/app focus and idle periods using Win32 APIs
 - **Smart Screen Capture**: Low-FPS screen capture using Windows Graphics Capture API
-- **AI Analysis**: Qwen2.5-VL vision model for activity summaries and timeline labeling
+- **AI Analysis**: Qwen2.5-VL vision model for activity summaries and timeline labeling (using Ollama structured output for reliable JSON responses)
 - **Queue System**: Handles overwhelming requests with priority-based processing
 - **Event Storage**: SQLite-based timeline storage with efficient querying
 - **CLI Tools**: Comprehensive command-line interface for viewing and exporting activity reports
@@ -50,9 +50,9 @@
    - Low-FPS burst mode on triggers
 
 4. **Inference Worker** (`OllamaInferenceClient`)
-   - Qwen2.5-VL integration via Ollama server
+   - Qwen2.5-VL integration via Ollama server with structured output
    - Multimodal frame analysis with 3B AWQ model
-   - Activity labeling and timeline generation
+   - Activity labeling and timeline generation with guaranteed JSON responses
 
 5. **Queue System** (`RequestQueueManager`)
    - Priority-based request processing
@@ -73,7 +73,7 @@
 
 ### System Requirements
 - **Windows 10/11 (64-bit)**
-- **4GB+ RAM** (for 2B model)
+- **6GB+ RAM** (for 3B model)
 - **Admin privileges** for initial setup
 
 ### .NET Requirements
@@ -91,7 +91,7 @@
 ### AI/ML Requirements
 - **Ollama** installed (with GPU support recommended)
   - Download: [https://ollama.ai](https://ollama.ai)
-  - Model: `qwen3-vl:2b` (2B optimized vision-language model)
+  - Model: `qwen2.5vl:3b` (3B vision-language model)
 
 ## Installation
 
@@ -110,13 +110,15 @@ dotnet publish ActivityMonitor.Service\ActivityMonitor.Service.csproj -c Release
 dotnet publish ActivityMonitor.CLI\ActivityMonitor.CLI.csproj -c Release -o publish
 ```
 
+> **Note:** After making code changes (such as the recent upgrade to Ollama structured output), you'll need to rebuild and republish your applications for the changes to take effect.
+
 ### 3. Setup Ollama with Qwen2.5-VL
 
 ```bash
 # Install Ollama from https://ollama.ai
 
 # Pull the Qwen2.5-VL model (3B AWQ quantized version)
-ollama pull qwen3-vl:2b
+ollama pull qwen2.5vl:3b
 
 # Verify Ollama is running (default port 11434)
 curl http://localhost:11434/api/tags
@@ -158,7 +160,7 @@ Edit `publish\appsettings.json`:
       "MaxFramesPerCapture": 1
     },
     "OllamaEndpoint": "http://localhost:11434",
-    "OllamaModel": "qwen3-vl:2b",
+    "OllamaModel": "qwen2.5vl:3b",
     "QueueSettings": {
       "MaxConcurrentTasks": 4,
       "MaxQueueSize": 100,
