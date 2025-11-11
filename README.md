@@ -193,33 +193,32 @@ The CLI provides various commands to view and export activity data:
 
 ```cmd
 # View activity timeline
-publish\ActivityMonitor.CLI.exe timeline --date 2024-01-15
+publish\ActivityMonitor.CLI.exe timeline --from "2024-01-15" --to "2024-01-16"
 
 # View detailed activity with AI analysis
-publish\ActivityMonitor.CLI.exe detailed --date 2024-01-15 --limit 50
+publish\ActivityMonitor.CLI.exe detailed --from "2024-01-15" --to "2024-01-16" --limit 50
 
 # View activity summary
-publish\ActivityMonitor.CLI.exe summary --date 2024-01-15
+publish\ActivityMonitor.CLI.exe summary --date "2024-01-15"
 
 # View activity statistics
-publish\ActivityMonitor.CLI.exe stats --date 2024-01-15
+publish\ActivityMonitor.CLI.exe stats
 
 # Export activity report to JSON
-publish\ActivityMonitor.CLI.exe report --date 2024-01-15 --output report.json
-
-Exports comprehensive activity data including time summaries, application usage, AI insights, and timeline segments for external analysis.
+publish\ActivityMonitor.CLI.exe report --from "2024-01-15" --to "2024-01-16" --output report.json
 
 # Query activities with custom filters
-publish\ActivityMonitor.CLI.exe query --start-date 2024-01-15 --end-date 2024-01-16 --process "chrome.exe"
+publish\ActivityMonitor.CLI.exe query --from "2024-01-15" --to "2024-01-16" --limit 100
 ```
 
 ### CLI Options
 
-- `--date`: Specify date in YYYY-MM-DD format
-- `--start-date`, `--end-date`: Date range for queries
-- `--limit`: Maximum number of results to display
-- `--process`: Filter by process name
-- `--output`: Output file path for report export
+- `--from`: Start date in YYYY-MM-DD format (for timeline, detailed, report, query)
+- `--to`: End date in YYYY-MM-DD format (for timeline, detailed, report, query)
+- `--date`: Specific date in YYYY-MM-DD format (for summary)
+- `--limit`: Maximum number of results to display (for detailed, query)
+- `--output`: Output file path for report export (for report)
+- `--format`: Export format (json only, for report)
 - `--help`: Show help for each command
 
 ## JSON Report Export
@@ -292,8 +291,10 @@ Use these reports for productivity analysis, time tracking, or integration with 
 ### CLI Commands Not Working
 - Ensure you're running from the publish folder
 - Check that ActivityData.db exists in publish\Data\
-- Verify date format (YYYY-MM-DD)
+- Verify date format (YYYY-MM-DD) and use quotes around dates
 - Use `--help` with any command for usage details
+- Timeline, detailed, report, and query commands require `--from` and/or `--to` dates
+- Summary command uses `--date` for a single day
 
 ### Database Issues
 - Check publish\Data\ActivityData.db file exists

@@ -5,7 +5,7 @@
 ### 1. **Complete Timeline View** (Recommended for seeing everything)
 ```cmd
 cd C:\ActivityMonitor\publish
-ActivityMonitor.CLI.exe timeline --date 2024-01-15
+ActivityMonitor.CLI.exe timeline --from "2024-01-15" --to "2024-01-16"
 ```
 This shows a chronological timeline of ALL activities with:
 - Timestamps
@@ -17,7 +17,7 @@ This shows a chronological timeline of ALL activities with:
 
 ### 2. **Detailed Activity Analysis** (Best for comprehensive details)
 ```cmd
-ActivityMonitor.CLI.exe detailed --date 2024-01-15 --limit 100
+ActivityMonitor.CLI.exe detailed --from "2024-01-15" --to "2024-01-16" --limit 100
 ```
 Shows rich, detailed cards for each activity including:
 - Full AI analysis
@@ -31,7 +31,7 @@ Shows rich, detailed cards for each activity including:
 
 ### 3. **Daily Summary** (Best for overview)
 ```cmd
-ActivityMonitor.CLI.exe summary --date 2024-01-15
+ActivityMonitor.CLI.exe summary --date "2024-01-15"
 ```
 Shows aggregated daily summary:
 - Activity breakdown by category
@@ -41,13 +41,13 @@ Shows aggregated daily summary:
 
 ### 4. **Activity Statistics**
 ```cmd
-ActivityMonitor.CLI.exe stats --date 2024-01-15
+ActivityMonitor.CLI.exe stats
 ```
 Shows detailed statistics and metrics
 
 ### 5. **Export Activity Report** (New!)
 ```cmd
-ActivityMonitor.CLI.exe report --date 2024-01-15 --output activity_report.json
+ActivityMonitor.CLI.exe report --from "2024-01-15" --to "2024-01-16" --output activity_report.json
 ```
 Exports comprehensive activity data to JSON format for external analysis
 
@@ -56,7 +56,7 @@ Exports comprehensive activity data to JSON format for external analysis
 ### See Everything User Did Today
 ```cmd
 cd C:\ActivityMonitor\publish
-ActivityMonitor.CLI.exe timeline --date 2024-01-15
+ActivityMonitor.CLI.exe timeline --from "2024-01-15" --to "2024-01-16"
 ```
 
 **Output Example:**
@@ -86,7 +86,7 @@ ActivityMonitor.CLI.exe timeline --date 2024-01-15
 
 ### See Detailed Analysis for Last 50 Activities
 ```cmd
-ActivityMonitor.CLI.exe detailed --date 2024-01-15 --limit 50
+ActivityMonitor.CLI.exe detailed --from "2024-01-15" --to "2024-01-16" --limit 50
 ```
 
 **Output Example:**
@@ -115,7 +115,7 @@ ActivityMonitor.CLI.exe detailed --date 2024-01-15 --limit 50
 
 ### See Daily Summary with Charts
 ```cmd
-ActivityMonitor.CLI.exe summary --date 2024-01-15
+ActivityMonitor.CLI.exe summary --date "2024-01-15"
 ```
 
 **Output Example:**
@@ -155,34 +155,34 @@ Communication   ████████ 15
 
 ### Last 7 Days
 ```cmd
-ActivityMonitor.CLI.exe timeline --start-date 2024-01-08 --end-date 2024-01-15
+ActivityMonitor.CLI.exe timeline --from "2024-01-08" --to "2024-01-15"
 ```
 
 ### Specific Date Range
 ```cmd
-ActivityMonitor.CLI.exe detailed --start-date 2024-01-10 --end-date 2024-01-10 --limit 200
+ActivityMonitor.CLI.exe detailed --from "2024-01-10" --to "2024-01-10" --limit 200
 ```
 
 ### Yesterday's Summary
 ```cmd
-ActivityMonitor.CLI.exe summary --date 2024-01-14
+ActivityMonitor.CLI.exe summary --date "2024-01-14"
 ```
 
 ## Export to File
 
 ### Save Timeline to Text File
 ```cmd
-ActivityMonitor.CLI.exe timeline --date 2024-01-15 > my_activity_log.txt
+ActivityMonitor.CLI.exe timeline --from "2024-01-15" --to "2024-01-16" > my_activity_log.txt
 ```
 
 ### Save Detailed Analysis
 ```cmd
-ActivityMonitor.CLI.exe detailed --date 2024-01-15 --limit 500 > detailed_activity.txt
+ActivityMonitor.CLI.exe detailed --from "2024-01-15" --to "2024-01-16" --limit 500 > detailed_activity.txt
 ```
 
 ### Export JSON Report (New!)
 ```cmd
-ActivityMonitor.CLI.exe report --date 2024-01-15 --output report.json
+ActivityMonitor.CLI.exe report --from "2024-01-15" --to "2024-01-16" --output report.json
 ```
 
 The JSON export creates a comprehensive activity report containing:
@@ -215,17 +215,17 @@ Use this for data analysis, reporting, or integration with other tools.
 
 ### See Only Recent Activities (Last 2 Hours)
 ```cmd
-ActivityMonitor.CLI.exe detailed --start-date 2024-01-15 --end-date 2024-01-15 --limit 50
+ActivityMonitor.CLI.exe detailed --from "2024-01-15" --to "2024-01-15" --limit 50
 ```
 
 ### Full Day Overview
 ```cmd
-ActivityMonitor.CLI.exe timeline --start-date 2024-01-15 --end-date 2024-01-15
+ActivityMonitor.CLI.exe timeline --from "2024-01-15" --to "2024-01-15"
 ```
 
 ### Filter by Application
 ```cmd
-ActivityMonitor.CLI.exe query --start-date 2024-01-15 --end-date 2024-01-15 --process "chrome.exe"
+ActivityMonitor.CLI.exe query --from "2024-01-15" --to "2024-01-15" --limit 100
 ```
 
 ## Batch Commands for Weekly Report
@@ -285,22 +285,22 @@ dotnet publish ActivityMonitor.CLI\ActivityMonitor.CLI.csproj -c Release -o publ
 ActivityMonitor.CLI.exe --help
 
 # Timeline view (chronological with details)
-ActivityMonitor.CLI.exe timeline --date 2024-01-15
+ActivityMonitor.CLI.exe timeline --from "2024-01-15" --to "2024-01-16"
 
 # Detailed analysis (rich cards with full info)
-ActivityMonitor.CLI.exe detailed --date 2024-01-15 --limit 100
+ActivityMonitor.CLI.exe detailed --from "2024-01-15" --to "2024-01-16" --limit 100
 
 # Daily summary (aggregated stats and charts)
-ActivityMonitor.CLI.exe summary --date 2024-01-15
+ActivityMonitor.CLI.exe summary --date "2024-01-15"
 
 # Activity statistics
-ActivityMonitor.CLI.exe stats --date 2024-01-15
+ActivityMonitor.CLI.exe stats
 
 # Export JSON report (new!)
-ActivityMonitor.CLI.exe report --date 2024-01-15 --output report.json
+ActivityMonitor.CLI.exe report --from "2024-01-15" --to "2024-01-16" --output report.json
 
 # Raw event query with filters
-ActivityMonitor.CLI.exe query --start-date 2024-01-15 --end-date 2024-01-16 --process "chrome.exe"
+ActivityMonitor.CLI.exe query --from "2024-01-15" --to "2024-01-16" --limit 100
 ```
 
 ---
@@ -321,13 +321,13 @@ cd C:\ActivityMonitor\publish
 ActivityMonitor.CLI.exe summary --date 2024-01-15
 
 # 2. See timeline of what you did
-ActivityMonitor.CLI.exe timeline --date 2024-01-15
+ActivityMonitor.CLI.exe timeline --from "2024-01-15" --to "2024-01-16"
 
 # 3. Deep dive into afternoon work
-ActivityMonitor.CLI.exe detailed --start-date 2024-01-15 --end-date 2024-01-15 --limit 50
+ActivityMonitor.CLI.exe detailed --from "2024-01-15" --to "2024-01-15" --limit 50
 
 # 4. Export for analysis
-ActivityMonitor.CLI.exe report --date 2024-01-15 --output daily_report.json
+ActivityMonitor.CLI.exe report --from "2024-01-15" --to "2024-01-16" --output daily_report.json
 ```
 
 This will give you **complete visibility** into everything the user did! 🎉

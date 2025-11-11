@@ -213,16 +213,16 @@ REM Check basic stats
 ActivityMonitor.CLI.exe stats
 
 REM View timeline
-ActivityMonitor.CLI.exe timeline --date 2024-01-15
+ActivityMonitor.CLI.exe timeline --from "2024-01-15" --to "2024-01-16"
 
 REM Detailed view
-ActivityMonitor.CLI.exe detailed --date 2024-01-15 --limit 10
+ActivityMonitor.CLI.exe detailed --from "2024-01-15" --to "2024-01-16" --limit 10
 
 REM Daily summary
-ActivityMonitor.CLI.exe summary --date 2024-01-15
+ActivityMonitor.CLI.exe summary --date "2024-01-15"
 
 # Export report
-ActivityMonitor.CLI.exe report --date 2024-01-15 --output test_report.json
+ActivityMonitor.CLI.exe report --from "2024-01-15" --to "2024-01-16" --output test_report.json
 ```
 
 ## Verification Checklist
@@ -311,16 +311,16 @@ After setup, verify:
 cd C:\ActivityMonitor\publish
 
 REM View today's timeline
-ActivityMonitor.CLI.exe timeline --date 2024-01-15
+ActivityMonitor.CLI.exe timeline --from "2024-01-15" --to "2024-01-16"
 
 REM Detailed analysis
-ActivityMonitor.CLI.exe detailed --date 2024-01-15 --limit 20
+ActivityMonitor.CLI.exe detailed --from "2024-01-15" --to "2024-01-16" --limit 20
 
 REM Daily summary
-ActivityMonitor.CLI.exe summary --date 2024-01-15
+ActivityMonitor.CLI.exe summary --date "2024-01-15"
 
 REM Export JSON report
-ActivityMonitor.CLI.exe report --date 2024-01-15 --output report.json
+ActivityMonitor.CLI.exe report --from "2024-01-15" --to "2024-01-16" --output report.json
 
 REM Quick stats
 ActivityMonitor.CLI.exe stats
@@ -382,7 +382,7 @@ echo 1. Create startup shortcut: Win+R, shell:startup
 echo 2. Add shortcut to C:\ActivityMonitor\publish\ActivityMonitor.Service.exe
 echo 3. Wait 5 minutes, then run:
 echo    cd C:\ActivityMonitor\publish
-echo    ActivityMonitor.CLI.exe timeline --date 2024-01-15
+echo    ActivityMonitor.CLI.exe timeline --from "2024-01-15" --to "2024-01-16"
 echo.
 pause
 ```

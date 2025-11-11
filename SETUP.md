@@ -107,34 +107,35 @@ Navigate to the publish folder and use these commands:
 cd C:\ActivityMonitor\publish
 
 # View activity timeline
-ActivityMonitor.CLI.exe timeline --date 2024-01-15
+ActivityMonitor.CLI.exe timeline --from "2024-01-15" --to "2024-01-16"
 
 # View detailed activity with AI analysis
-ActivityMonitor.CLI.exe detailed --date 2024-01-15 --limit 50
+ActivityMonitor.CLI.exe detailed --from "2024-01-15" --to "2024-01-16" --limit 50
 
 # View activity summary
-ActivityMonitor.CLI.exe summary --date 2024-01-15
+ActivityMonitor.CLI.exe summary --date "2024-01-15"
 
 # View activity statistics
-ActivityMonitor.CLI.exe stats --date 2024-01-15
+ActivityMonitor.CLI.exe stats
 
 # Export activity report to JSON
-ActivityMonitor.CLI.exe report --date 2024-01-15 --output report.json
+ActivityMonitor.CLI.exe report --from "2024-01-15" --to "2024-01-16" --output report.json
 
 # Export activity report to JSON
-publish\ActivityMonitor.CLI.exe report --date 2024-01-15 --output report.json
+publish\ActivityMonitor.CLI.exe report --from "2024-01-15" --to "2024-01-16" --output report.json
 
 # Query activities with custom filters
-publish\ActivityMonitor.CLI.exe query --start-date 2024-01-15 --end-date 2024-01-16 --process "chrome.exe"
+publish\ActivityMonitor.CLI.exe query --from "2024-01-15" --to "2024-01-16" --limit 100
 ```
 
 ### CLI Options
 
-- `--date`: Specify date in YYYY-MM-DD format
-- `--start-date`, `--end-date`: Date range for queries
-- `--limit`: Maximum number of results to display
-- `--process`: Filter by process name
-- `--output`: Output file path for report export
+- `--from`: Start date in YYYY-MM-DD format (for timeline, detailed, report, query)
+- `--to`: End date in YYYY-MM-DD format (for timeline, detailed, report, query)
+- `--date`: Specific date in YYYY-MM-DD format (for summary)
+- `--limit`: Maximum number of results to display (for detailed, query)
+- `--output`: Output file path for report export (for report)
+- `--format`: Export format (json only, for report)
 - `--help`: Show help for each command
 
 ## JSON Report Export
@@ -171,8 +172,10 @@ Reports are saved to the specified output path and can be used for external anal
 
 1. Ensure you're running from the publish folder
 2. Check that ActivityData.db exists in publish\Data\
-3. Verify date format (YYYY-MM-DD)
+3. Verify date format (YYYY-MM-DD) and use quotes around dates
 4. Use `--help` with any command for usage details
+5. Timeline, detailed, report, and query commands require `--from` and/or `--to` dates
+6. Summary command uses `--date` for a single day
 
 ### Database Issues
 
