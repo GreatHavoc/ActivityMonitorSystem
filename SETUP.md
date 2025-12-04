@@ -140,13 +140,59 @@ publish\ActivityMonitor.CLI.exe query --from "2024-01-15" --to "2024-01-16" --li
 
 ## JSON Report Export
 
-The `report` command generates detailed JSON reports for comprehensive activity analysis:
+The `report` command generates optimized JSON reports (Schema v2.0) for comprehensive activity analysis:
 
-- **Time summaries** with active/idle breakdowns
-- **Per-application usage** with window-level details
-- **AI-powered activity insights** including content types and topics
-- **Timeline segments** with precise timestamps
+- **Check-in/Check-out tracking** - First and last activity timestamps define actual working hours
+- **Time tracking** - Total tracked time based on actual activity window (not full 24-hour day)
+- **Per-application usage** with window-level details and insight indices
+- **AI-powered activity insights** including content types, topics, and summaries
+- **Optimized timeline segments** with UTC timestamps
 - **Content type categorization** for productivity analysis
+
+### Report Schema v2.0
+
+The optimized schema reduces file size by 50-70% compared to v1.0:
+
+```json
+{
+  "SchemaVersion": "2.0",
+  "GeneratedAtUtc": "2024-01-15T20:30:00Z",
+  "RangeStartUtc": "2024-01-15T00:00:00Z",
+  "RangeEndUtc": "2024-01-15T23:59:59Z",
+  "CheckInTimeUtc": "2024-01-15T09:00:00Z",
+  "CheckOutTimeUtc": "2024-01-15T17:30:00Z",
+  "TotalTrackedSeconds": 30600,
+  "TotalActiveSeconds": 28000,
+  "TotalIdleSeconds": 2600,
+  "FocusEventsAnalyzed": 245,
+  "Applications": [
+    {
+      "ProcessName": "Code",
+      "TotalActiveSeconds": 14520,
+      "Windows": [{"Title": "Program.cs", "ActiveSeconds": 8000}],
+      "InsightIndices": [0, 5, 12, 23]
+    }
+  ],
+  "DetailedActivities": [...],
+  "ContentTypeBreakdown": [...],
+  "Segments": [
+    {
+      "EndUtc": "2024-01-15T09:05:00Z",
+      "DurationSeconds": 300,
+      "IsIdle": false,
+      "ProcessName": "Code"
+    }
+  ]
+}
+```
+
+**Key improvements in v2.0:**
+- `InsightIndices` references `DetailedActivities` array instead of duplicating data
+- UTC-only timestamps (clients can convert to local time)
+- No formatted duration strings (clients can compute from seconds)
+- Segments use only `EndUtc` (start time = previous segment's end)
+- Null values are omitted from output
+- `VisibleText` truncated to 200 characters
 
 Reports are saved to the specified output path and can be used for external analysis tools or custom reporting.
 

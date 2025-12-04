@@ -187,25 +187,30 @@ ActivityMonitor.CLI.exe report --from "2024-01-15" --to "2024-01-16" --output re
 
 The JSON export creates a comprehensive activity report containing:
 
-- **Time Summary**: Total tracked time, active time, and idle time
+- **Time Summary**: Total tracked, active, and idle time in seconds
+- **Check-In/Check-Out**: First and last activity timestamps of the day
 - **Application Usage**: Detailed breakdown by application with time spent per window
-- **Activity Insights**: All AI-analyzed activities with content types, topics, and summaries
+- **Activity Insights**: Deduplicated AI-analyzed activities with content types, topics, and summaries
 - **Content Categories**: Breakdown by activity type (coding, browsing, documents, etc.)
-- **Timeline Segments**: Chronological timeline with precise start/end times
+- **Timeline Segments**: Chronological timeline with UTC timestamps
 
-**Report Structure:**
+**Report Structure (Schema v2.0):**
 ```json
 {
-  "generatedAtUtc": "2024-01-15T20:30:00Z",
-  "rangeStartLocal": "2024-01-15T00:00:00",
-  "rangeEndLocal": "2024-01-15T23:59:59",
-  "totalTrackedTimeFormatted": "8h 30m 15s",
-  "totalActiveTimeFormatted": "6h 45m 22s",
-  "totalIdleTimeFormatted": "1h 44m 53s",
-  "applications": [...],
-  "detailedActivities": [...],
-  "contentTypeBreakdown": [...],
-  "segments": [...]
+  "SchemaVersion": "2.0",
+  "GeneratedAtUtc": "2024-01-15T20:30:00Z",
+  "RangeStartUtc": "2024-01-15T00:00:00Z",
+  "RangeEndUtc": "2024-01-15T23:59:59Z",
+  "CheckInTimeUtc": "2024-01-15T09:00:00Z",
+  "CheckOutTimeUtc": "2024-01-15T17:30:00Z",
+  "TotalTrackedSeconds": 30615,
+  "TotalActiveSeconds": 24322,
+  "TotalIdleSeconds": 6293,
+  "AllInsights": [...],
+  "Applications": [...],
+  "DetailedActivities": [...],
+  "ContentTypeBreakdown": [...],
+  "Segments": [...]
 }
 ```
 

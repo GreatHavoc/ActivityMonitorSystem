@@ -3,6 +3,7 @@ using Spectre.Console;
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Linq;
 
 namespace ActivityMonitor.CLI;
@@ -63,10 +64,10 @@ class Program
         AnsiConsole.MarkupLine("               Options: --date <date>");
         AnsiConsole.MarkupLine("               Example: ActivityMonitor.CLI summary --date \"2025-10-12\"");
         AnsiConsole.WriteLine();
-    AnsiConsole.MarkupLine("  [cyan]report[/]    Export a detailed activity report to disk");
-    AnsiConsole.MarkupLine("               Options: --from <date> --to <date> --output <path>");
-    AnsiConsole.MarkupLine("               Example: ActivityMonitor.CLI report --from \"2025-10-22\" --output report.json");
-    AnsiConsole.WriteLine();
+        AnsiConsole.MarkupLine("  [cyan]report[/]     Export a detailed activity report to disk");
+        AnsiConsole.MarkupLine("               Options: --from <date> --to <date> --output <path>");
+        AnsiConsole.MarkupLine("               Example: ActivityMonitor.CLI report --from \"2025-10-22\" --output report.json");
+        AnsiConsole.WriteLine();
         AnsiConsole.MarkupLine("  [cyan]query[/]      Query activity events (raw data)");
         AnsiConsole.MarkupLine("               Options: --from <date> --to <date> --limit <number>");
         AnsiConsole.WriteLine();
@@ -104,28 +105,8 @@ class Program
 
     static async Task QueryEventsAsync(string? fromDate, string? toDate, int limit)
     {
-        // First try the service's relative path
-        var dbPath = Path.Combine(Directory.GetCurrentDirectory(), "Data", "ActivityData.db");
-        
-        // If not found, try the ProgramData location
-        if (!File.Exists(dbPath))
-        {
-            dbPath = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
-                "ActivityMonitor",
-                "Data",
-                "ActivityData.db");
-        }
-
-        if (!File.Exists(dbPath))
-        {
-            AnsiConsole.MarkupLine("[red]Database not found![/]");
-            AnsiConsole.MarkupLine("[yellow]Checked locations:[/]");
-            AnsiConsole.MarkupLine($"  1. {EscapeMarkup(Path.Combine(Directory.GetCurrentDirectory(), "Data", "ActivityData.db"))}");
-            AnsiConsole.MarkupLine($"  2. {EscapeMarkup(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "ActivityMonitor", "Data", "ActivityData.db"))}");
-            AnsiConsole.MarkupLine("[yellow]Make sure the service is running first![/]");
-            return;
-        }
+        var dbPath = GetDatabasePath();
+        if (dbPath == null) return;
 
         AnsiConsole.MarkupLine($"[green]Using database: {EscapeMarkup(dbPath)}[/]");
 
@@ -192,25 +173,8 @@ class Program
 
     static async Task ShowStatsAsync()
     {
-        // First try the service's relative path
-        var dbPath = Path.Combine(Directory.GetCurrentDirectory(), "Data", "ActivityData.db");
-        
-        // If not found, try the ProgramData location
-        if (!File.Exists(dbPath))
-        {
-            dbPath = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
-                "ActivityMonitor",
-                "Data",
-                "ActivityData.db");
-        }
-
-        if (!File.Exists(dbPath))
-        {
-            AnsiConsole.MarkupLine("[red]Database not found![/]");
-            AnsiConsole.MarkupLine("[yellow]Make sure the service is running first![/]");
-            return;
-        }
+        var dbPath = GetDatabasePath();
+        if (dbPath == null) return;
 
         AnsiConsole.MarkupLine($"[green]Using database: {EscapeMarkup(dbPath)}[/]");
 
@@ -407,7 +371,20 @@ class Program
         var report = await ExportActivityReportAsync(dbPath, fromLocal, toLocalInclusive, outputPath);
 
         AnsiConsole.MarkupLine($"[green]Report exported to {EscapeMarkup(outputPath)}[/]");
-        AnsiConsole.MarkupLine($"[dim]Active time: {report.TotalActiveTimeFormatted}, Idle time: {report.TotalIdleTimeFormatted}[/]");
+        
+        // Display check-in/check-out summary
+        if (!string.IsNullOrEmpty(report.CheckInTimeUtc) && !string.IsNullOrEmpty(report.CheckOutTimeUtc))
+        {
+            var checkIn = DateTime.Parse(report.CheckInTimeUtc).ToLocalTime();
+            var checkOut = DateTime.Parse(report.CheckOutTimeUtc).ToLocalTime();
+            AnsiConsole.MarkupLine($"[cyan]Check-in:[/] {checkIn:HH:mm:ss}  [cyan]Check-out:[/] {checkOut:HH:mm:ss}");
+        }
+        else
+        {
+            AnsiConsole.MarkupLine("[yellow]No activity events found in the specified date range.[/]");
+        }
+        
+        AnsiConsole.MarkupLine($"[dim]Tracked time: {FormatDuration(report.TotalTrackedSeconds)} (Active: {FormatDuration(report.TotalActiveSeconds)}, Idle: {FormatDuration(report.TotalIdleSeconds)})[/]");
         return 0;
     }
 
@@ -608,13 +585,24 @@ class Program
         long totalActiveSeconds = 0;
         long totalIdleSeconds = 0;
 
-        DateTime segmentStart = fromUtc;
-        var currentEvent = previousEvent ?? new EventSnapshot
+        // Determine check-in (first event) and check-out (last event) times
+        DateTime? checkInTime = events.Count > 0 ? events[0].TimestampUtc : null;
+        DateTime? checkOutTime = events.Count > 0 ? events[^1].TimestampUtc : null;
+        
+        // TotalTrackedSeconds is now based on actual activity window (check-out - check-in)
+        // If no events, tracked time is 0
+        var durationSecondsTotal = (checkInTime.HasValue && checkOutTime.HasValue)
+            ? (long)Math.Max(0, (checkOutTime.Value - checkInTime.Value).TotalSeconds)
+            : 0L;
+
+        // Use check-in time as segment start, or fall back to fromUtc if no events
+        DateTime segmentStart = checkInTime ?? fromUtc;
+        var currentEvent = (events.Count > 0) ? null : (previousEvent ?? new EventSnapshot
         {
             TimestampUtc = fromUtc,
             EventType = "idle",
             IsIdle = true
-        };
+        });
 
         void Accumulate(EventSnapshot snapshot, DateTime startUtc, DateTime endUtc)
         {
@@ -623,7 +611,8 @@ class Program
                 return;
             }
 
-            var durationSeconds = (long)Math.Round((endUtc - startUtc).TotalSeconds);
+            var exactDuration = endUtc - startUtc;
+            var durationSeconds = (long)exactDuration.TotalSeconds; // Truncate instead of round
             if (durationSeconds <= 0)
             {
                 return;
@@ -631,10 +620,8 @@ class Program
 
             var segment = new TimelineSegment
             {
-                StartLocal = startUtc.ToLocalTime().ToString("O"),
-                EndLocal = endUtc.ToLocalTime().ToString("O"),
+                EndUtc = endUtc.ToString("O"),
                 DurationSeconds = durationSeconds,
-                DurationFormatted = FormatDuration(durationSeconds),
                 IsIdle = snapshot.IsIdle,
                 ProcessName = snapshot.IsIdle
                     ? "Idle"
@@ -666,13 +653,14 @@ class Program
         foreach (var evt in events)
         {
             var timestamp = evt.TimestampUtc;
-            if (timestamp < fromUtc)
+            // Clamp timestamps to the check-in/check-out window
+            if (checkInTime.HasValue && timestamp < checkInTime.Value)
             {
-                timestamp = fromUtc;
+                timestamp = checkInTime.Value;
             }
-            if (timestamp > toUtcExclusive)
+            if (checkOutTime.HasValue && timestamp > checkOutTime.Value)
             {
-                timestamp = toUtcExclusive;
+                timestamp = checkOutTime.Value;
             }
 
             if (currentEvent != null)
@@ -684,9 +672,16 @@ class Program
             segmentStart = timestamp;
         }
 
-        if (currentEvent != null)
+        // Note: We don't extend the last event to end of day anymore.
+        // The last event's timestamp IS the check-out time, so no additional
+        // accumulation is needed. Time between events is properly tracked,
+        // and TotalTrackedSeconds = CheckOutTime - CheckInTime.
+
+        // Ensure totals add up exactly to TotalTrackedSeconds
+        // Any remaining time (tracked - active) is considered idle
+        if (durationSecondsTotal > 0)
         {
-            Accumulate(currentEvent, segmentStart, toUtcExclusive);
+            totalIdleSeconds = Math.Max(0, durationSecondsTotal - totalActiveSeconds);
         }
 
         var insights = new List<ActivityInsight>();
@@ -731,17 +726,23 @@ class Program
                     contentType = "Unknown";
                 }
 
+                var visibleText = reader.IsDBNull(7) ? string.Empty : reader.GetString(7);
+                // Truncate VisibleText to 200 chars to reduce report size
+                if (visibleText.Length > 200)
+                {
+                    visibleText = visibleText.Substring(0, 197) + "...";
+                }
+
                 var insight = new ActivityInsight
                 {
                     TimestampUtc = processedAt.ToString("O"),
-                    TimestampLocal = processedAt.ToLocalTime().ToString("O"),
                     ActivityLabel = reader.IsDBNull(1) ? string.Empty : reader.GetString(1),
                     Application = application,
                     ContentType = contentType,
                     Topic = reader.IsDBNull(4) ? string.Empty : reader.GetString(4),
                     Action = reader.IsDBNull(5) ? string.Empty : reader.GetString(5),
                     Summary = reader.IsDBNull(6) ? string.Empty : reader.GetString(6),
-                    VisibleText = reader.IsDBNull(7) ? string.Empty : reader.GetString(7),
+                    VisibleText = visibleText,
                     Confidence = reader.GetDouble(8)
                 };
 
@@ -763,23 +764,35 @@ class Program
             }
         }
 
-        var durationSecondsTotal = (long)Math.Max(0, (toUtcExclusive - fromUtc).TotalSeconds);
+        // Build index map for insight deduplication
+        var insightIndexByApplication = new Dictionary<string, List<int>>(StringComparer.OrdinalIgnoreCase);
+        for (int i = 0; i < insights.Count; i++)
+        {
+            var app = insights[i].Application;
+            if (!insightIndexByApplication.TryGetValue(app, out var indexList))
+            {
+                indexList = new List<int>();
+                insightIndexByApplication[app] = indexList;
+            }
+            indexList.Add(i);
+        }
 
-        List<ActivityInsight> InsightProvider(string processName) => MatchInsights(processName, insightsByApplication);
+        List<int> InsightIndexProvider(string processName) => MatchInsightIndices(processName, insightIndexByApplication);
 
         var report = new ActivityReport
         {
             GeneratedAtUtc = DateTime.UtcNow.ToString("O"),
-            GeneratedAtLocal = DateTime.Now.ToString("O"),
-            RangeStartLocal = fromLocal.ToString("O"),
-            RangeEndLocal = toLocalInclusive.ToString("O"),
+            RangeStartUtc = fromUtc.ToString("O"),
+            RangeEndUtc = toUtcExclusive.AddTicks(-1).ToString("O"),
+            
+            // Check-in/Check-out times
+            CheckInTimeUtc = checkInTime?.ToString("O"),
+            CheckOutTimeUtc = checkOutTime?.ToString("O"),
+            
             TotalTrackedSeconds = durationSecondsTotal,
-            TotalTrackedTimeFormatted = FormatDuration(durationSecondsTotal),
             TotalActiveSeconds = totalActiveSeconds,
-            TotalActiveTimeFormatted = FormatDuration(totalActiveSeconds),
             TotalIdleSeconds = totalIdleSeconds,
-            TotalIdleTimeFormatted = FormatDuration(totalIdleSeconds),
-            FocusEventsAnalyzed = events.Count + (previousEvent != null ? 1 : 0),
+            FocusEventsAnalyzed = events.Count,
             DetailedActivities = insights,
             ContentTypeBreakdown = contentSummaries.Values
                 .Select(builder => builder.ToSummary())
@@ -789,13 +802,14 @@ class Program
         };
 
         report.Applications = usageBuilders.Values
-            .Select(builder => builder.ToReportEntry(InsightProvider))
+            .Select(builder => builder.ToReportEntry(InsightIndexProvider))
             .OrderByDescending(entry => entry.TotalActiveSeconds)
             .ToList();
 
         var jsonOptions = new JsonSerializerOptions
         {
-            WriteIndented = true
+            WriteIndented = true,
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
         };
 
         var json = JsonSerializer.Serialize(report, jsonOptions);
@@ -976,9 +990,9 @@ class Program
         appCommand.Parameters.AddWithValue("@To", to.ToString("O"));
 
         var appTable = new Table();
-        appTable.Title = new TableTitle("[cyan]Top Applications[/]");
+        appTable.Title = new TableTitle("[cyan]Top Applications by Inference Count[/]");
         appTable.AddColumn("Application");
-        appTable.AddColumn("Activity Count");
+        appTable.AddColumn("Inference Count");
 
         using (var reader = await appCommand.ExecuteReaderAsync())
         {
@@ -1021,7 +1035,7 @@ class Program
                 {
                     var chart = new BarChart()
                         .Width(60)
-                        .Label("[green bold]Activity Distribution[/]");
+                        .Label("[green bold]Activity Distribution by Inference Count[/]");
 
                     chart.AddItem("Coding", reader.GetInt64(1), Color.Blue);
                     chart.AddItem("Web Browsing", reader.GetInt64(2), Color.Green);
@@ -1112,6 +1126,59 @@ class Program
         return results;
     }
 
+    static List<int> MatchInsightIndices(string processName, Dictionary<string, List<int>> insightIndexByApplication)
+    {
+        var results = new List<int>();
+
+        if (string.IsNullOrWhiteSpace(processName))
+        {
+            return results;
+        }
+
+        var normalizedProcess = NormalizeKey(processName);
+        var seen = new HashSet<int>();
+
+        foreach (var kvp in insightIndexByApplication)
+        {
+            if (string.IsNullOrWhiteSpace(kvp.Key))
+            {
+                continue;
+            }
+
+            var normalizedApplication = NormalizeKey(kvp.Key);
+            if (normalizedApplication.Length == 0)
+            {
+                continue;
+            }
+
+            if (normalizedApplication == normalizedProcess ||
+                normalizedApplication.Contains(normalizedProcess, StringComparison.OrdinalIgnoreCase) ||
+                normalizedProcess.Contains(normalizedApplication, StringComparison.OrdinalIgnoreCase))
+            {
+                foreach (var index in kvp.Value)
+                {
+                    if (seen.Add(index))
+                    {
+                        results.Add(index);
+                    }
+                }
+            }
+        }
+
+        results.Sort();
+        return results;
+    }
+
+    static string Truncate(string? text, int maxLength, string suffix = "...")
+    {
+        if (string.IsNullOrEmpty(text) || text.Length <= maxLength)
+        {
+            return text ?? string.Empty;
+        }
+        
+        return text.Substring(0, maxLength - suffix.Length) + suffix;
+    }
+
     static string NormalizeKey(string? text)
     {
         if (string.IsNullOrWhiteSpace(text))
@@ -1160,16 +1227,18 @@ class Program
 
     class ActivityReport
     {
+        public string SchemaVersion { get; set; } = "2.0";
         public string GeneratedAtUtc { get; set; } = string.Empty;
-        public string GeneratedAtLocal { get; set; } = string.Empty;
-        public string RangeStartLocal { get; set; } = string.Empty;
-        public string RangeEndLocal { get; set; } = string.Empty;
+        public string RangeStartUtc { get; set; } = string.Empty;
+        public string RangeEndUtc { get; set; } = string.Empty;
+        
+        // Check-in/Check-out times based on actual activity
+        public string? CheckInTimeUtc { get; set; }
+        public string? CheckOutTimeUtc { get; set; }
+        
         public long TotalTrackedSeconds { get; set; }
-        public string TotalTrackedTimeFormatted { get; set; } = string.Empty;
         public long TotalActiveSeconds { get; set; }
-        public string TotalActiveTimeFormatted { get; set; } = string.Empty;
         public long TotalIdleSeconds { get; set; }
-        public string TotalIdleTimeFormatted { get; set; } = string.Empty;
         public int FocusEventsAnalyzed { get; set; }
         public List<ApplicationUsage> Applications { get; set; } = new();
         public List<ActivityInsight> DetailedActivities { get; set; } = new();
@@ -1181,24 +1250,20 @@ class Program
     {
         public string ProcessName { get; set; } = string.Empty;
         public long TotalActiveSeconds { get; set; }
-        public string ActiveTimeFormatted { get; set; } = string.Empty;
         public List<WindowUsage> Windows { get; set; } = new();
-        public List<ActivityInsight> Insights { get; set; } = new();
+        public List<int> InsightIndices { get; set; } = new();
     }
 
     class WindowUsage
     {
         public string Title { get; set; } = string.Empty;
         public long ActiveSeconds { get; set; }
-        public string ActiveTimeFormatted { get; set; } = string.Empty;
     }
 
     class TimelineSegment
     {
-        public string StartLocal { get; set; } = string.Empty;
-        public string EndLocal { get; set; } = string.Empty;
+        public string EndUtc { get; set; } = string.Empty;
         public long DurationSeconds { get; set; }
-        public string DurationFormatted { get; set; } = string.Empty;
         public bool IsIdle { get; set; }
         public string ProcessName { get; set; } = string.Empty;
         public string? WindowTitle { get; set; }
@@ -1207,7 +1272,6 @@ class Program
     class ActivityInsight
     {
         public string TimestampUtc { get; set; } = string.Empty;
-        public string TimestampLocal { get; set; } = string.Empty;
         public string ActivityLabel { get; set; } = string.Empty;
         public string Application { get; set; } = string.Empty;
         public string ContentType { get; set; } = string.Empty;
@@ -1298,15 +1362,14 @@ class Program
             }
         }
 
-        public ApplicationUsage ToReportEntry(Func<string, List<ActivityInsight>> insightProvider)
+        public ApplicationUsage ToReportEntry(Func<string, List<int>> insightIndexProvider)
         {
             var windows = _windowDurations
                 .OrderByDescending(kv => kv.Value)
                 .Select(kv => new WindowUsage
                 {
                     Title = kv.Key,
-                    ActiveSeconds = kv.Value,
-                    ActiveTimeFormatted = FormatDuration(kv.Value)
+                    ActiveSeconds = kv.Value
                 })
                 .ToList();
 
@@ -1314,9 +1377,8 @@ class Program
             {
                 ProcessName = ProcessName,
                 TotalActiveSeconds = _totalSeconds,
-                ActiveTimeFormatted = FormatDuration(_totalSeconds),
                 Windows = windows,
-                Insights = insightProvider(ProcessName)
+                InsightIndices = insightIndexProvider(ProcessName)
             };
         }
     }

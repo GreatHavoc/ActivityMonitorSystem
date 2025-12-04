@@ -223,33 +223,54 @@ publish\ActivityMonitor.CLI.exe query --from "2024-01-15" --to "2024-01-16" --li
 
 ## JSON Report Export
 
-The `report` command generates comprehensive JSON reports containing:
+The `report` command generates optimized JSON reports (Schema v2.0) containing:
 
-- **Time Tracking**: Total active/idle time breakdowns
+- **Check-in/Check-out Tracking**: First and last activity timestamps define actual working hours
+- **Time Tracking**: Total tracked time based on actual activity window (not full 24-hour day)
 - **Application Usage**: Per-application time spent with window details
 - **AI Activity Analysis**: Content types, topics, and summaries for each activity
-- **Timeline Data**: Chronological segments with precise timestamps
+- **Timeline Data**: Optimized segments with UTC timestamps
 - **Content Categories**: Activity breakdown by type (coding, browsing, documents, etc.)
 
-**Example Report Structure:**
+**Report Schema v2.0** - Optimized for 50-70% smaller file size:
 ```json
 {
-  "generatedAtUtc": "2024-01-15T20:30:00Z",
-  "totalActiveTimeFormatted": "6h 45m 22s",
-  "totalIdleTimeFormatted": "1h 44m 53s",
-  "applications": [
+  "SchemaVersion": "2.0",
+  "GeneratedAtUtc": "2024-01-15T20:30:00Z",
+  "RangeStartUtc": "2024-01-15T00:00:00Z",
+  "RangeEndUtc": "2024-01-15T23:59:59Z",
+  "CheckInTimeUtc": "2024-01-15T09:00:00Z",
+  "CheckOutTimeUtc": "2024-01-15T17:30:00Z",
+  "TotalTrackedSeconds": 30600,
+  "TotalActiveSeconds": 28000,
+  "TotalIdleSeconds": 2600,
+  "Applications": [
     {
-      "processName": "Visual Studio Code",
-      "totalActiveSeconds": 14520,
-      "activeTimeFormatted": "4h 2m 0s",
-      "insights": [...]
+      "ProcessName": "Visual Studio Code",
+      "TotalActiveSeconds": 14520,
+      "Windows": [{"Title": "Program.cs", "ActiveSeconds": 8000}],
+      "InsightIndices": [0, 5, 12, 23]
     }
   ],
-  "detailedActivities": [...],
-  "contentTypeBreakdown": [...],
-  "segments": [...]
+  "DetailedActivities": [...],
+  "ContentTypeBreakdown": [...],
+  "Segments": [
+    {
+      "EndUtc": "2024-01-15T09:05:00Z",
+      "DurationSeconds": 300,
+      "IsIdle": false,
+      "ProcessName": "Code"
+    }
+  ]
 }
 ```
+
+**Key features of v2.0:**
+- `InsightIndices` references `DetailedActivities` array (deduplication)
+- UTC-only timestamps (clients convert to local)
+- No formatted strings (clients compute from seconds)
+- Optimized segments (only `EndUtc`, start inferred from previous)
+- Null values omitted, `VisibleText` truncated to 200 chars
 
 Use these reports for productivity analysis, time tracking, or integration with other tools.
 
