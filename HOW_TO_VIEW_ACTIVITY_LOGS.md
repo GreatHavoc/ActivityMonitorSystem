@@ -45,11 +45,17 @@ ActivityMonitor.CLI.exe stats
 ```
 Shows detailed statistics and metrics
 
-### 5. **Export Activity Report** (New!)
+### 5. **Export Activity Report**
 ```cmd
 ActivityMonitor.CLI.exe report --from "2024-01-15" --to "2024-01-16" --output activity_report.json
 ```
 Exports comprehensive activity data to JSON format for external analysis
+
+### 6. **Export LLM-Optimized Report** (New!)
+```cmd
+ActivityMonitor.CLI.exe report --from "2024-01-15" --to "2024-01-16" --llm
+```
+Exports a compact, narrative-focused report optimized for LLM consumption and analysis
 
 ## Examples
 
@@ -180,7 +186,7 @@ ActivityMonitor.CLI.exe timeline --from "2024-01-15" --to "2024-01-16" > my_acti
 ActivityMonitor.CLI.exe detailed --from "2024-01-15" --to "2024-01-16" --limit 500 > detailed_activity.txt
 ```
 
-### Export JSON Report (New!)
+### Export JSON Report
 ```cmd
 ActivityMonitor.CLI.exe report --from "2024-01-15" --to "2024-01-16" --output report.json
 ```
@@ -215,6 +221,67 @@ The JSON export creates a comprehensive activity report containing:
 ```
 
 Use this for data analysis, reporting, or integration with other tools.
+
+### Export LLM-Optimized Report (New!)
+```cmd
+ActivityMonitor.CLI.exe report --from "2024-01-15" --to "2024-01-16" --llm
+ActivityMonitor.CLI.exe report --from "2024-01-15" --llm --output weekly-summary.json
+```
+
+The `--llm` flag generates a compact, narrative-focused report (Schema v3.0-llm) optimized for LLM consumption:
+
+- **Executive Summary**: One-liner, narrative description, accomplishments, technologies used
+- **Hourly Breakdown**: Hour-by-hour view of focus areas, applications, and topics
+- **Projects**: Inferred project groupings with time spent, files edited, and work summaries
+- **Top Activities**: 20 most informative activities with full context and summaries
+- **Significant Moments**: Key events like focus sessions, context switches, and transitions
+- **Patterns**: Productivity insights like most productive hour, longest focus session, observations
+
+**LLM Report Structure (Schema v3.0-llm):**
+```json
+{
+  "SchemaVersion": "3.0-llm",
+  "ReportDate": "2024-01-15",
+  "WorkingHours": {
+    "Start": "09:23",
+    "End": "17:45",
+    "TotalMinutes": 502,
+    "TotalFormatted": "8h 22m"
+  },
+  "ExecutiveSummary": {
+    "OneLiner": "Focused on fashion_agent (2h 30m) with 137 activities across 12 apps",
+    "Narrative": "On January 15, 2024, work started at 9:23 AM and ended at 5:45 PM...",
+    "Accomplishments": "Edited code in 15 sessions. Researched: LangGraph, PostgreSQL...",
+    "Technologies": ["Python", "LangGraph", "PostgreSQL", "Docker"]
+  },
+  "HourlyBreakdown": [
+    {"Hour": "09:00-09:59", "PrimaryFocus": "code", "Topics": ["graph.py", "state management"]}
+  ],
+  "Projects": [
+    {
+      "Name": "fashion_agent",
+      "Type": "Software Development",
+      "TimeFormatted": "2h 30m",
+      "KeyFiles": ["graph.py", "data_collector.py"],
+      "TopicsWorkedOn": ["LangGraph", "PostgreSQL checkpointer"]
+    }
+  ],
+  "TopActivities": [...],
+  "SignificantMoments": [...],
+  "Patterns": {
+    "MostProductiveHour": "14:00 (23 activities)",
+    "LongestFocusSession": "VS Code (45 minutes)",
+    "ContextSwitches": 28,
+    "Observations": ["Heavy coding day (45% code activities)"]
+  }
+}
+```
+
+Use this format for:
+- AI-powered productivity analysis
+- Daily standup summaries
+- Time tracking reports
+- Integration with LLM-based tools and agents
 
 ## Filtering Tips
 
@@ -301,8 +368,11 @@ ActivityMonitor.CLI.exe summary --date "2024-01-15"
 # Activity statistics
 ActivityMonitor.CLI.exe stats
 
-# Export JSON report (new!)
+# Export JSON report (detailed format)
 ActivityMonitor.CLI.exe report --from "2024-01-15" --to "2024-01-16" --output report.json
+
+# Export LLM-optimized report (compact, narrative format)
+ActivityMonitor.CLI.exe report --from "2024-01-15" --to "2024-01-16" --llm
 
 # Raw event query with filters
 ActivityMonitor.CLI.exe query --from "2024-01-15" --to "2024-01-16" --limit 100
@@ -317,6 +387,7 @@ ActivityMonitor.CLI.exe query --from "2024-01-15" --to "2024-01-16" --limit 100
 2. Use `timeline` to see chronological flow of activities
 3. Dive into `detailed` for specific periods of interest
 4. Export `report` for data analysis in other tools
+5. Use `report --llm` for AI-powered analysis or daily summaries
 
 **Example workflow:**
 ```cmd
@@ -331,8 +402,11 @@ ActivityMonitor.CLI.exe timeline --from "2024-01-15" --to "2024-01-16"
 # 3. Deep dive into afternoon work
 ActivityMonitor.CLI.exe detailed --from "2024-01-15" --to "2024-01-15" --limit 50
 
-# 4. Export for analysis
+# 4. Export detailed report for analysis
 ActivityMonitor.CLI.exe report --from "2024-01-15" --to "2024-01-16" --output daily_report.json
+
+# 5. Export LLM-friendly summary for AI analysis
+ActivityMonitor.CLI.exe report --from "2024-01-15" --llm
 ```
 
 This will give you **complete visibility** into everything the user did! 🎉

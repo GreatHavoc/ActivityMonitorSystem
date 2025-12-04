@@ -204,6 +204,18 @@ publish\ActivityMonitor.CLI.exe summary --date "2024-01-15"
 # View activity statistics
 publish\ActivityMonitor.CLI.exe stats
 
+# Export detailed activity report to JSON
+publish\ActivityMonitor.CLI.exe report --from "2024-01-15" --to "2024-01-16" --output report.json
+
+# Export LLM-optimized report (compact, narrative format)
+publish\ActivityMonitor.CLI.exe report --from "2024-01-15" --to "2024-01-16" --llm
+
+# View activity summary
+publish\ActivityMonitor.CLI.exe summary --date "2024-01-15"
+
+# View activity statistics
+publish\ActivityMonitor.CLI.exe stats
+
 # Export activity report to JSON
 publish\ActivityMonitor.CLI.exe report --from "2024-01-15" --to "2024-01-16" --output report.json
 
@@ -218,12 +230,16 @@ publish\ActivityMonitor.CLI.exe query --from "2024-01-15" --to "2024-01-16" --li
 - `--date`: Specific date in YYYY-MM-DD format (for summary)
 - `--limit`: Maximum number of results to display (for detailed, query)
 - `--output`: Output file path for report export (for report)
+- `--llm`: Generate LLM-optimized report with narratives and patterns (for report)
 - `--format`: Export format (json only, for report)
 - `--help`: Show help for each command
 
 ## JSON Report Export
 
-The `report` command generates optimized JSON reports (Schema v2.0) containing:
+The `report` command supports two output formats:
+
+### Standard Report (Schema v2.0)
+Optimized JSON reports containing:
 
 - **Check-in/Check-out Tracking**: First and last activity timestamps define actual working hours
 - **Time Tracking**: Total tracked time based on actual activity window (not full 24-hour day)
@@ -271,6 +287,48 @@ The `report` command generates optimized JSON reports (Schema v2.0) containing:
 - No formatted strings (clients compute from seconds)
 - Optimized segments (only `EndUtc`, start inferred from previous)
 - Null values omitted, `VisibleText` truncated to 200 chars
+
+### LLM-Optimized Report (Schema v3.0-llm)
+
+Compact, narrative-focused reports optimized for LLM consumption:
+
+```cmd
+publish\ActivityMonitor.CLI.exe report --from "2024-01-15" --llm
+```
+
+The `--llm` flag generates reports with:
+- **Executive Summary**: One-liner, narrative description, accomplishments, technologies
+- **Hourly Breakdown**: Hour-by-hour view of focus areas, applications, topics
+- **Projects**: Inferred project groupings with time spent and work summaries
+- **Top Activities**: 20 most informative activities with full context
+- **Significant Moments**: Key events, focus sessions, and transitions
+- **Patterns**: Productivity insights (most productive hour, context switches, observations)
+
+**LLM Report Structure:**
+```json
+{
+  "SchemaVersion": "3.0-llm",
+  "ReportDate": "2024-01-15",
+  "WorkingHours": {"Start": "09:23", "End": "17:45", "TotalFormatted": "8h 22m"},
+  "ExecutiveSummary": {
+    "OneLiner": "Focused on fashion_agent (2h 30m) with 137 activities across 12 apps",
+    "Narrative": "On January 15, work started at 9:23 AM and ended at 5:45 PM...",
+    "Accomplishments": "Edited code in 15 sessions. Researched: LangGraph, PostgreSQL...",
+    "Technologies": ["Python", "LangGraph", "Docker"]
+  },
+  "HourlyBreakdown": [{"Hour": "14:00-14:59", "PrimaryFocus": "code", "Topics": [...]}],
+  "Projects": [{"Name": "fashion_agent", "TimeFormatted": "2h 30m", "KeyFiles": [...]}],
+  "TopActivities": [...],
+  "SignificantMoments": [...],
+  "Patterns": {
+    "MostProductiveHour": "14:00 (23 activities)",
+    "LongestFocusSession": "VS Code (45 minutes)",
+    "Observations": ["Heavy coding day (45% code activities)"]
+  }
+}
+```
+
+Use LLM reports for AI-powered productivity analysis, daily standups, or integration with LLM-based tools and agents.
 
 Use these reports for productivity analysis, time tracking, or integration with other tools.
 

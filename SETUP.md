@@ -118,14 +118,14 @@ ActivityMonitor.CLI.exe summary --date "2024-01-15"
 # View activity statistics
 ActivityMonitor.CLI.exe stats
 
-# Export activity report to JSON
+# Export detailed activity report to JSON
 ActivityMonitor.CLI.exe report --from "2024-01-15" --to "2024-01-16" --output report.json
 
-# Export activity report to JSON
-publish\ActivityMonitor.CLI.exe report --from "2024-01-15" --to "2024-01-16" --output report.json
+# Export LLM-optimized report (compact, narrative format)
+ActivityMonitor.CLI.exe report --from "2024-01-15" --to "2024-01-16" --llm
 
 # Query activities with custom filters
-publish\ActivityMonitor.CLI.exe query --from "2024-01-15" --to "2024-01-16" --limit 100
+ActivityMonitor.CLI.exe query --from "2024-01-15" --to "2024-01-16" --limit 100
 ```
 
 ### CLI Options
@@ -135,12 +135,20 @@ publish\ActivityMonitor.CLI.exe query --from "2024-01-15" --to "2024-01-16" --li
 - `--date`: Specific date in YYYY-MM-DD format (for summary)
 - `--limit`: Maximum number of results to display (for detailed, query)
 - `--output`: Output file path for report export (for report)
+- `--llm`: Generate LLM-optimized report with narratives and patterns (for report)
 - `--format`: Export format (json only, for report)
 - `--help`: Show help for each command
 
 ## JSON Report Export
 
-The `report` command generates optimized JSON reports (Schema v2.0) for comprehensive activity analysis:
+The `report` command supports two output formats:
+
+### Standard Report (Schema v2.0)
+Optimized JSON reports for comprehensive activity analysis:
+
+```cmd
+ActivityMonitor.CLI.exe report --from "2024-01-15" --output report.json
+```
 
 - **Check-in/Check-out tracking** - First and last activity timestamps define actual working hours
 - **Time tracking** - Total tracked time based on actual activity window (not full 24-hour day)
@@ -193,6 +201,46 @@ The optimized schema reduces file size by 50-70% compared to v1.0:
 - Segments use only `EndUtc` (start time = previous segment's end)
 - Null values are omitted from output
 - `VisibleText` truncated to 200 characters
+
+### LLM-Optimized Report (Schema v3.0-llm)
+
+Compact, narrative-focused reports optimized for LLM consumption:
+
+```cmd
+ActivityMonitor.CLI.exe report --from "2024-01-15" --llm
+```
+
+The `--llm` flag generates a report with:
+- **Executive Summary**: One-liner, narrative, accomplishments, technologies
+- **Hourly Breakdown**: Hour-by-hour focus areas and topics
+- **Projects**: Inferred project groupings with time and work summaries
+- **Top Activities**: 20 most informative activities with full context
+- **Significant Moments**: Key events and focus sessions
+- **Patterns**: Productivity insights (most productive hour, context switches, observations)
+
+```json
+{
+  "SchemaVersion": "3.0-llm",
+  "ReportDate": "2024-01-15",
+  "WorkingHours": {"Start": "09:23", "End": "17:45", "TotalFormatted": "8h 22m"},
+  "ExecutiveSummary": {
+    "OneLiner": "Focused on fashion_agent (2h 30m) with 137 activities",
+    "Narrative": "On January 15, work started at 9:23 AM...",
+    "Technologies": ["Python", "LangGraph", "Docker"]
+  },
+  "HourlyBreakdown": [...],
+  "Projects": [...],
+  "TopActivities": [...],
+  "SignificantMoments": [...],
+  "Patterns": {
+    "MostProductiveHour": "14:00 (23 activities)",
+    "LongestFocusSession": "VS Code (45 minutes)",
+    "Observations": ["Heavy coding day (45%)"]
+  }
+}
+```
+
+Use LLM reports for AI-powered analysis, daily standups, or integration with LLM agents.
 
 Reports are saved to the specified output path and can be used for external analysis tools or custom reporting.
 
