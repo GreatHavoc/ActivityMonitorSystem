@@ -18,13 +18,13 @@
 
 ---
 
-🖥️ **Activity Monitor** is a lightweight Windows application that monitors user activity through window focus tracking, idle detection, and intelligent screen capture with AI-powered activity analysis using Qwen2.5-VL.
+🖥️ **Activity Monitor** is a lightweight Windows application that monitors user activity through window focus tracking, idle detection, and intelligent screen capture with AI-powered activity analysis using Qwen3-VL.
 
 ## Features
 
 - **Activity Tracking**: Monitors active window/app focus and idle periods using Win32 APIs
 - **Smart Screen Capture**: Low-FPS screen capture using Windows Graphics Capture API
-- **AI Analysis**: Qwen2.5-VL vision model for activity summaries and timeline labeling (using Ollama structured output for reliable JSON responses)
+- **AI Analysis**: Qwen3-VL vision model for activity summaries and timeline labeling (using Ollama structured output for reliable JSON responses)
 - **Queue System**: Handles overwhelming requests with priority-based processing
 - **Event Storage**: SQLite-based timeline storage with efficient querying
 - **CLI Tools**: Comprehensive command-line interface for viewing and exporting activity reports
@@ -50,8 +50,8 @@
    - Low-FPS burst mode on triggers
 
 4. **Inference Worker** (`OllamaInferenceClient`)
-   - Qwen2.5-VL integration via Ollama server with structured output
-   - Multimodal frame analysis with 3B AWQ model
+   - Qwen3-VL integration via Ollama server with structured output
+   - Multimodal frame analysis with 2B model
    - Activity labeling and timeline generation with guaranteed JSON responses
 
 5. **Queue System** (`RequestQueueManager`)
@@ -73,7 +73,7 @@
 
 ### System Requirements
 - **Windows 10/11 (64-bit)**
-- **6GB+ RAM** (for 3B model)
+- **4GB+ RAM** (for 2B model)
 - **Admin privileges** for initial setup
 
 ### .NET Requirements
@@ -89,9 +89,9 @@
 - [.NET 8.0 Runtime](https://dotnet.microsoft.com/download/dotnet/8.0) - For running published apps
 
 ### AI/ML Requirements
-- **Ollama** installed (with GPU support recommended)
+- **Ollama 0.12.7+** installed (with GPU support recommended)
   - Download: [https://ollama.ai](https://ollama.ai)
-  - Model: `qwen2.5vl:3b` (3B vision-language model)
+  - Model: `qwen3-vl:2b` (2B vision-language model, 1.9GB)
 
 ## Installation
 
@@ -112,13 +112,13 @@ dotnet publish ActivityMonitor.CLI\ActivityMonitor.CLI.csproj -c Release -o publ
 
 > **Note:** After making code changes (such as the recent upgrade to Ollama structured output), you'll need to rebuild and republish your applications for the changes to take effect.
 
-### 3. Setup Ollama with Qwen2.5-VL
+### 3. Setup Ollama with Qwen3-VL
 
 ```bash
-# Install Ollama from https://ollama.ai
+# Install Ollama 0.12.7+ from https://ollama.ai
 
-# Pull the Qwen2.5-VL model (3B AWQ quantized version)
-ollama pull qwen2.5vl:3b
+# Pull the Qwen3-VL 2B model (~1.9GB download)
+ollama pull qwen3-vl:2b
 
 # Verify Ollama is running (default port 11434)
 curl http://localhost:11434/api/tags
@@ -160,7 +160,7 @@ Edit `publish\appsettings.json`:
       "MaxFramesPerCapture": 1
     },
     "OllamaEndpoint": "http://localhost:11434",
-    "OllamaModel": "qwen2.5vl:3b",
+    "OllamaModel": "qwen3-vl:2b",
     "QueueSettings": {
       "MaxConcurrentTasks": 4,
       "MaxQueueSize": 100,
@@ -481,6 +481,5 @@ MIT License - See LICENSE file for details
 ## Acknowledgments
 
 - Ollama team for easy local LLM deployment
-- Qwen team for vision-language models
+- Qwen team for vision-language models (Qwen3-VL)
 - Microsoft for Windows Graphics Capture API
-- Community for AWQ quantization methods
