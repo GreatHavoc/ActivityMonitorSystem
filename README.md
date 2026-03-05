@@ -117,7 +117,7 @@ dotnet publish ActivityMonitor.CLI\ActivityMonitor.CLI.csproj -c Release -o publ
 ```bash
 # Install Ollama 0.12.7+ from https://ollama.ai
 
-# Pull the Qwen3-VL 2B model (~1.9GB download)
+# Pull the Qwen3-VL 2B model (requires Ollama 0.12.7+)
 ollama pull qwen3-vl:2b
 
 # Verify Ollama is running (default port 11434)

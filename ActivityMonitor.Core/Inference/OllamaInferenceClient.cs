@@ -10,7 +10,7 @@ using System.Text.Json.Serialization;
 namespace ActivityMonitor.Core.Inference;
 
 /// <summary>
-/// Client for Ollama server with Qwen3-VL-2B model
+/// Client for Ollama server with Qwen3-VL 2B model
 /// Handles multimodal inference requests using Ollama API
 /// </summary>
 public class OllamaInferenceClient
@@ -33,7 +33,7 @@ public class OllamaInferenceClient
     }
 
     /// <summary>
-    /// Analyzes captured frames using Qwen3-VL via Ollama
+    /// Analyzes captured frames using Qwen3-VL via Ollama Chat API
     /// </summary>
     public async Task<InferenceResult?> AnalyzeFramesAsync(
         List<byte[]> frames, 
@@ -43,24 +43,34 @@ public class OllamaInferenceClient
         {
             _logger.LogInformation("Sending {FrameCount} frames to Ollama for analysis", frames.Count);
 
-            // Prepare request with vision support
-            var request = new OllamaGenerateRequest
+            var images = ConvertFramesToBase64(frames);
+
+            // Use /api/chat which properly supports think: false
+            var request = new OllamaChatRequest
             {
                 Model = _settings.OllamaModel,
-                Prompt = BuildPrompt(),
-                Images = ConvertFramesToBase64(frames),
+                Messages = new List<OllamaChatMessage>
+                {
+                    new OllamaChatMessage
+                    {
+                        Role = "user",
+                        Content = BuildPrompt(),
+                        Images = images
+                    }
+                },
                 Stream = false,
+                Think = false,
                 Format = BuildStructuredOutputFormat(),
                 Options = new OllamaOptions
                 {
                     Temperature = 0.1,
                     TopP = 0.9,
-                    NumPredict = 512
+                    NumPredict = 1024
                 }
             };
 
             var response = await _httpClient.PostAsJsonAsync(
-                "/api/generate", 
+                "/api/chat", 
                 request, 
                 cancellationToken);
 
@@ -72,18 +82,32 @@ public class OllamaInferenceClient
                 return null;
             }
 
-            var ollamaResponse = await response.Content.ReadFromJsonAsync<OllamaGenerateResponse>(
-                cancellationToken: cancellationToken);
+            var rawBody = await response.Content.ReadAsStringAsync(cancellationToken);
+            _logger.LogInformation("Raw Ollama response body: {RawBody}", rawBody);
 
-            if (ollamaResponse == null || string.IsNullOrEmpty(ollamaResponse.Response))
+            OllamaChatResponse? chatResponse = null;
+            try
             {
-                _logger.LogWarning("Empty response from Ollama");
+                chatResponse = JsonSerializer.Deserialize<OllamaChatResponse>(rawBody);
+            }
+            catch (JsonException jsonEx)
+            {
+                _logger.LogError(jsonEx, "Failed to deserialize Ollama response. Raw body: {RawBody}", rawBody);
                 return null;
             }
 
-            _logger.LogDebug("Ollama response: {Response}", ollamaResponse.Response);
+            var content = chatResponse?.Message?.Content;
 
-            return ParseResponse(ollamaResponse.Response);
+            if (chatResponse == null || string.IsNullOrEmpty(content))
+            {
+                _logger.LogWarning("Empty response from Ollama. Response null: {IsNull}, Content: '{Content}'", 
+                    chatResponse == null, content);
+                return null;
+            }
+
+            _logger.LogInformation("Ollama response: {Content}", content);
+
+            return ParseResponse(content);
         }
         catch (Exception ex)
         {
@@ -94,7 +118,7 @@ public class OllamaInferenceClient
 
     private string BuildPrompt()
     {
-        return "Analyze the screen and extract user activity details.";
+        return "Analyze this screenshot. Identify the application, what the user is doing, and the topic. Keep all fields concise. For visible_text, include only the window title and 1-2 key lines, nothing more.";
     }
 
     private object BuildStructuredOutputFormat()
@@ -104,13 +128,13 @@ public class OllamaInferenceClient
             type = "object",
             properties = new
             {
-                activity_label = new { type = "string" },
-                application = new { type = "string" },
+                activity_label = new { type = "string", description = "Short label for the activity, max 5 words" },
+                application = new { type = "string", description = "Application name" },
                 content_type = new { type = "string", @enum = new[] { "code", "web", "document", "video", "chat", "email", "image", "other" } },
-                topic = new { type = "string" },
+                topic = new { type = "string", description = "Topic in 1-3 words" },
                 action = new { type = "string", @enum = new[] { "reading", "writing", "browsing", "coding", "editing", "watching", "chatting", "searching", "other" } },
-                summary = new { type = "string" },
-                visible_text = new { type = "string" },
+                summary = new { type = "string", description = "1-2 sentence summary" },
+                visible_text = new { type = "string", description = "Window title only" },
                 confidence = new { type = "number", minimum = 0.0, maximum = 1.0 }
             },
             required = new[] { "activity_label", "summary", "confidence", "application", "content_type", "topic", "action", "visible_text" }
@@ -152,7 +176,7 @@ public class OllamaInferenceClient
                 Topic = root.GetProperty("topic").GetString() ?? "",
                 Action = root.GetProperty("action").GetString() ?? "",
                 Summary = root.GetProperty("summary").GetString() ?? "",
-                VisibleText = root.GetProperty("visible_text").GetString() ?? "",
+                VisibleText = root.TryGetProperty("visible_text", out var vt) ? vt.GetString() ?? "" : "",
                 Confidence = root.TryGetProperty("confidence", out var conf) ? conf.GetDouble() : 0.0,
                 RawResponse = content
             };
@@ -217,6 +241,69 @@ public class OllamaInferenceClient
 
 #region Ollama API Models
 
+public class OllamaChatRequest
+{
+    [JsonPropertyName("model")]
+    public string Model { get; set; } = string.Empty;
+
+    [JsonPropertyName("messages")]
+    public List<OllamaChatMessage> Messages { get; set; } = new();
+
+    [JsonPropertyName("stream")]
+    public bool Stream { get; set; } = false;
+
+    [JsonPropertyName("format")]
+    public object? Format { get; set; }
+
+    [JsonPropertyName("options")]
+    public OllamaOptions? Options { get; set; }
+
+    [JsonPropertyName("think")]
+    public bool? Think { get; set; }
+}
+
+public class OllamaChatMessage
+{
+    [JsonPropertyName("role")]
+    public string Role { get; set; } = string.Empty;
+
+    [JsonPropertyName("content")]
+    public string Content { get; set; } = string.Empty;
+
+    [JsonPropertyName("images")]
+    public List<string>? Images { get; set; }
+}
+
+public class OllamaChatResponse
+{
+    [JsonPropertyName("model")]
+    public string Model { get; set; } = string.Empty;
+
+    [JsonPropertyName("created_at")]
+    public string CreatedAt { get; set; } = string.Empty;
+
+    [JsonPropertyName("message")]
+    public OllamaChatMessage? Message { get; set; }
+
+    [JsonPropertyName("done")]
+    public bool Done { get; set; }
+
+    [JsonPropertyName("done_reason")]
+    public string? DoneReason { get; set; }
+
+    [JsonPropertyName("total_duration")]
+    public long? TotalDuration { get; set; }
+
+    [JsonPropertyName("load_duration")]
+    public long? LoadDuration { get; set; }
+
+    [JsonPropertyName("prompt_eval_duration")]
+    public long? PromptEvalDuration { get; set; }
+
+    [JsonPropertyName("eval_duration")]
+    public long? EvalDuration { get; set; }
+}
+
 public class OllamaGenerateRequest
 {
     [JsonPropertyName("model")]
@@ -236,6 +323,9 @@ public class OllamaGenerateRequest
 
     [JsonPropertyName("options")]
     public OllamaOptions? Options { get; set; }
+
+    [JsonPropertyName("think")]
+    public bool? Think { get; set; }
 }
 
 public class OllamaOptions
@@ -260,6 +350,9 @@ public class OllamaGenerateResponse
 
     [JsonPropertyName("response")]
     public string Response { get; set; } = string.Empty;
+
+    [JsonPropertyName("thinking")]
+    public string? Thinking { get; set; }
 
     [JsonPropertyName("done")]
     public bool Done { get; set; }

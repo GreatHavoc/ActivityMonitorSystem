@@ -26,21 +26,21 @@ dotnet publish ActivityMonitor.Service\ActivityMonitor.Service.csproj -c Release
 dotnet publish ActivityMonitor.CLI\ActivityMonitor.CLI.csproj -c Release -o publish
 ```
 
-### 3. Setup Ollama with Qwen2.5-VL
+### 3. Setup Ollama with Qwen3-VL
 
 Download and install Ollama from [https://ollama.ai](https://ollama.ai)
 
-Then pull the Qwen2.5-VL model:
+Then pull the Qwen3-VL model:
 
 ```bash
 # Pull the 3B AWQ quantized model (smaller, faster)
-ollama pull qwen2.5vl:3b
+ollama pull qwen3-vl:2b
 
 # Verify Ollama is running
 curl http://localhost:11434/api/tags
 
 # Test the model
-ollama run qwen2.5vl:3b "What can you see?"
+ollama run qwen3-vl:2b "What can you see?"
 ```
 
 **Note**: The 2B model requires ~1-2GB VRAM and provides excellent performance for real-time analysis.
@@ -82,7 +82,7 @@ Edit `publish\appsettings.json`:
       "MaxFramesPerCapture": 1
     },
     "OllamaEndpoint": "http://localhost:11434",
-    "OllamaModel": "qwen2.5vl:3b",
+    "OllamaModel": "qwen3-vl:2b",
     "QueueSettings": {
       "MaxConcurrentTasks": 4,
       "MaxQueueSize": 100,
@@ -314,7 +314,7 @@ rmdir /s "C:\ActivityMonitor"
 - Increase MaxConcurrentTasks to 6-8
 - Use higher frame rates (2-3 FPS)
 - Enable frame retention for detailed analysis
-- Consider using larger models: `ollama pull qwen2.5-vl:7b`
+- Consider using larger models: `ollama pull qwen3-vl:8b`
 
 ## Security Considerations
 
