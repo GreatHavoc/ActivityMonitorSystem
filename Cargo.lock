@@ -40,6 +40,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "activity-monitor-mcp"
+version = "0.1.0"
+dependencies = [
+ "activity-monitor-core",
+ "jiff",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "activity-monitor-service"
 version = "0.1.0"
 dependencies = [

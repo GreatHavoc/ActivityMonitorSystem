@@ -41,6 +41,34 @@ sc create "Activity Monitor Service" binPath= "C:\ActivityMonitor\publish2\activ
 sc start "Activity Monitor Service"
 ```
 
+## MCP server (let an AI agent query your activity)
+
+`activity-monitor-mcp.exe` speaks MCP spec 2026-07-28 (dual-era: also the
+legacy 2025-11-25/2025-06-18 handshake) over stdio, and optionally Streamable
+HTTP on `127.0.0.1` with `--http [port]` (default 8765). It opens the database
+read-only, so it never blocks the service. Five read-only tools:
+`todays_timeline`, `session_summary`, `activity_at`, `daily_report`,
+`ask_about_my_day` (uses the Ollama endpoint/model from `appsettings.json`).
+
+Claude Desktop / VS Code `mcpServers` snippet (run from publish2 so it finds
+`Data\ActivityData.db` and `appsettings.json`; or pass `--db`):
+
+```json
+{
+  "mcpServers": {
+    "activity-monitor": {
+      "command": "C:\\ActivityMonitor\\publish2\\activity-monitor-mcp.exe",
+      "args": ["--db", "C:\\ProgramData\\ActivityMonitor\\Data\\ActivityData.db"]
+    }
+  }
+}
+```
+
+HTTP mode for clients that prefer it: start
+`activity-monitor-mcp.exe --http 8765`, then point the client at
+`http://127.0.0.1:8765/mcp` (loopback only, POST with
+`Accept: application/json, text/event-stream`).
+
 ## Configuration
 
 Edit `publish2\appsettings.json` — see README.md for the full annotated

@@ -4,6 +4,7 @@ members = [
     "crates/activity-monitor-core",
     "crates/activity-monitor-service",
     "crates/activity-monitor-cli",
+    "crates/activity-monitor-mcp",
 ]
 
 [workspace.package]

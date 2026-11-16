@@ -38,6 +38,13 @@ the original .NET version.
   daily summaries, statistics, and two JSON reports — a detailed one for
   tools, a compact narrative one for pasting into any LLM. Report formats
   are identical to the old .NET version, so existing scripts keep working.
+- **Your agent can see your day.** `activity-monitor-mcp.exe` (shipped in
+  `publish2/`) speaks MCP spec 2026-07-28 over stdio (plus Streamable HTTP
+  on `127.0.0.1` via `--http`), exposing five read-only tools over the same
+  database — today's timeline, per-app summaries, "what was on screen at
+  2 pm?", a JSON daily report, and ask-the-model questions — so any
+  MCP-capable agent (Claude Desktop, VS Code, your own scripts) connects
+  with one config line (see SETUP.md).
 - **Safe to try, easy to undo.** The new build reads and writes the exact
   same database as the old one and keeps its own logs; switching back is one
   shortcut change, your history is never at risk. History older than 90 days
@@ -45,8 +52,8 @@ the original .NET version.
 
 ## Under the hood (~30%, technical view)
 
-- Rust workspace (`core` / `service` / `cli`); release exes in `publish2/`
-  are static-CRT — zero runtime dependencies on the target machine
+- Rust workspace (`core` / `service` / `cli` / `mcp`); release exes in
+  `publish2/` are static-CRT — zero runtime dependencies on the target machine
 - SQLite (`ActivityEvents`, `InferenceResults`), schema byte-compatible with
   the .NET version, `"O"`-format UTC timestamps
 - Win32 sensors (foreground window, idle time); GDI screen capture → JPEG q75
@@ -55,8 +62,12 @@ the original .NET version.
   (`ACTIVITY_MONITOR_OLLAMA_EXE` overrides the binary path)
 - Priority queue (Critical/High/Normal/Low, depth 100, 4 workers,
   drop-when-full), graceful drain on stop
-- 42 tests green; CLI output golden-diffed MATCH against the .NET CLI;
+- 47 tests green; CLI output golden-diffed MATCH against the .NET CLI;
   10 defects from the C# version fixed during the port (`RELEASE_NOTES.md`)
+- MCP server: hand-rolled JSON-RPC core (no SDK), dual-era 2026-07-28 /
+  2025-11-25 / 2025-06-18, `server/discover`, read-only SQLite
+  (`SQLITE_OPEN_READ_ONLY`) so it never blocks the service; protocol unit
+  tests + stdio/HTTP smoke tests against a seeded DB
 - Runs as a console app via the Startup folder, or as a Windows service
   (`--service` + `sc create`)
 
@@ -79,6 +90,7 @@ the original .NET version.
 - Day-zero self-provisioning (database + AI engine + model)
 - Local timeline of app/window activity with AI session labels
 - CLI reports in .NET-compatible formats
+- MCP server next to the service (read-only agent access to your day)
 - One-folder deploy, rollback by switching one shortcut
 
 ### Next — the following 1–3 months
@@ -92,12 +104,6 @@ the original .NET version.
 - **All your screens, not just the primary one.** Multi-monitor capture, plus
   an optional Windows Graphics Capture mode behind a config flag (the capture
   method the original docs promised).
-- **Your agent can see your day.** An MCP (Model Context Protocol) server
-  shipped next to the service, exposing read-only tools over the same SQLite
-  database — today's timeline, per-session AI summaries, "what was I working
-  on around 2 pm?", and an ask-the-model tool for "summarize my day / what
-  should I do next". Any MCP-capable agent (Claude Desktop, VS Code, your own
-  scripts) connects with one config line and sees your actual work directly.
 
 ### Later — when there is evidence it's worth it
 - **See your day, don't just query it.** A local read-only web page over the

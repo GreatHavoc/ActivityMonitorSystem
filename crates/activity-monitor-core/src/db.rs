@@ -69,6 +69,15 @@ impl ActivityDatabase {
         Ok(Self { conn: Connection::open(path)? })
     }
 
+    /// Read-only open for the MCP server: never creates the file and never
+    /// blocks the service's writes (SQLite readers don't lock writers in WAL,
+    /// and even in rollback mode a reader only takes a SHARED lock).
+    pub fn open_read_only(path: &Path) -> rusqlite::Result<Self> {
+        Ok(Self {
+            conn: Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)?,
+        })
+    }
+
     pub fn conn(&self) -> &Connection {
         &self.conn
     }

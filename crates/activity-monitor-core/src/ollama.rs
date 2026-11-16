@@ -92,6 +92,57 @@ impl OllamaClient {
         }
     }
 
+    /// Plain text chat (no images, no structured format) for the MCP server's
+    /// ask_about_my_day tool. Returns None on any failure, like analyze_frames.
+    pub async fn chat_text(&self, system: &str, user: &str, cancel: &AtomicBool) -> Option<String> {
+        match self.try_chat_text(system, user, cancel).await {
+            Ok(v) => v,
+            Err(e) => {
+                tracing::error!(error = %e, "Error during Ollama text chat");
+                None
+            }
+        }
+    }
+
+    async fn try_chat_text(
+        &self,
+        system: &str,
+        user: &str,
+        cancel: &AtomicBool,
+    ) -> Result<Option<String>, Box<dyn std::error::Error>> {
+        let body = json!({
+            "model": self.model,
+            "messages": [
+                { "role": "system", "content": system },
+                { "role": "user", "content": user }
+            ],
+            "stream": false,
+            "think": false,
+            "options": { "temperature": 0.3, "top_p": 0.9, "num_predict": 1024 }
+        });
+        let fut = async {
+            let resp = self
+                .http
+                .post(format!("{}/api/chat", self.endpoint))
+                .json(&body)
+                .send()
+                .await?;
+            let status = resp.status();
+            let raw = resp.text().await?;
+            Ok::<_, reqwest::Error>((status, raw))
+        };
+        let (status, raw) = select_cancel(fut, cancel).await?.map_err(Box::new)?;
+        if !status.is_success() {
+            tracing::error!("Ollama chat failed: {status} - {raw}");
+            return Ok(None);
+        }
+        let chat: Option<ChatResponse> = serde_json::from_str(&raw).ok();
+        Ok(chat
+            .and_then(|c| c.message)
+            .and_then(|m| m.content)
+            .filter(|c| !c.is_empty()))
+    }
+
     /// Port of CheckHealthAsync: /api/tags, model name substring match (ordinal ignore case).
     pub async fn check_health(&self, cancel: &AtomicBool) -> bool {
         match self.try_health(cancel).await {
