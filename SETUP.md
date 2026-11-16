@@ -3,12 +3,13 @@
 ## Prerequisites
 
 1. **Windows 10/11 (64-bit)** — no .NET runtime needed (static CRT build)
-2. **Ollama** — [ollama.ai](https://ollama.ai), with the model pulled:
-   ```bash
-   ollama pull qwen3-vl:2b
-   curl http://localhost:11434/api/tags   # must list qwen3-vl:2b
-   ```
-3. **Rust toolchain** — only if building from source
+2. **Rust toolchain** — only if building from source
+
+Ollama does **not** need to be pre-installed: on first run the service
+downloads it (official GitHub release zip into `%LOCALAPPDATA%\Programs\Ollama`),
+starts `ollama serve`, and pulls `qwen3-vl:2b` automatically. If you prefer to
+install it yourself: [ollama.ai](https://ollama.ai), `ollama pull qwen3-vl:2b`,
+then verify `curl http://localhost:11434/api/tags` lists the model.
 
 ## Quick start (prebuilt)
 

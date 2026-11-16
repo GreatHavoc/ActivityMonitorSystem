@@ -19,6 +19,8 @@ use activity_monitor_core::sensors;
 use jiff::{Timestamp, Unit};
 use uuid::Uuid;
 
+mod bootstrap;
+
 /// Hardcoded in C# (ActivityMonitorService): periodic capture every 3 minutes,
 /// 10 s throttle on event-based captures.
 const PERIODIC_CAPTURE_INTERVAL: Duration = Duration::from_secs(3 * 60);
@@ -91,6 +93,9 @@ async fn run_loop(settings: &ActivityMonitorSettings, cancel: Arc<AtomicBool>) -
     };
     tracing::info!(db = %db_path.display(), "Initializing database");
     let db = Arc::new(Mutex::new(db));
+    // Day-zero bootstrap (blocking): install/start Ollama and pull the model
+    // when missing, so inference works from the first capture.
+    bootstrap::ensure_ollama(settings, &cancel).await;
     let ollama = Arc::new(OllamaClient::new(settings));
     let queue = Arc::new(RequestQueueManager::new(settings, ollama, Arc::clone(&db)));
     queue.start();

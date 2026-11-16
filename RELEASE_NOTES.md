@@ -1,5 +1,16 @@
 # Release Notes — Rust port (publish2/)
 
+## Day-zero bootstrap (added post-release, 2026-11-16)
+
+The service now self-provisions on a new system: it creates
+`Data\ActivityData.db` if missing, checks Ollama via `/api/tags`, starts
+`ollama serve` when the server is down, runs `ollama pull <model>` when the
+model is missing, and downloads the official `ollama-windows-amd64.zip`
+into `%LOCALAPPDATA%\Programs\Ollama` when no `ollama.exe` exists. Startup
+blocks until the model is ready (first run downloads ~2 GB); any failure is
+logged with the manual fix and monitoring continues without inference.
+Override the binary location with `ACTIVITY_MONITOR_OLLAMA_EXE`.
+
 Parity-first port of the .NET Activity Monitor to Rust. The SQLite database is
 byte-compatible (same DDL, `"O"`-format UTC TEXT timestamps), so the new
 service and CLI read and write the same `ActivityData.db` as the .NET build.

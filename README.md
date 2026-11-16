@@ -24,8 +24,12 @@ build deploys to `publish2/`.
 
 - **Windows 10/11 (64-bit)** — the release executables are statically linked
   (no .NET runtime or VC++ redistributable needed)
-- **Ollama** with the `qwen3-vl:2b` model pulled (`ollama pull qwen3-vl:2b`),
-  listening on `http://localhost:11434`
+- **Nothing else**: on first run the service creates `Data\ActivityData.db`
+  automatically, and if Ollama is missing it downloads the official release
+  zip into `%LOCALAPPDATA%\Programs\Ollama`, starts `ollama serve`, and pulls
+  `qwen3-vl:2b` (startup blocks until the model is ready; ~2 GB download on
+  first run). Set `ACTIVITY_MONITOR_OLLAMA_EXE` to use a specific ollama.exe.
+  If the download fails the service keeps monitoring and logs the manual fix.
 - **Rust toolchain** only if building from source
 
 ## Installation (from source)

@@ -103,6 +103,17 @@ impl OllamaClient {
         }
     }
 
+    /// True when the server answers /api/tags at all (the model may still be
+    /// missing) — used by the service bootstrap to decide whether to start
+    /// `ollama serve` or just `ollama pull`.
+    pub async fn server_up(&self, cancel: &AtomicBool) -> bool {
+        let fut = async {
+            let resp = self.http.get(format!("{}/api/tags", self.endpoint)).send().await?;
+            Ok::<_, reqwest::Error>(resp.status().is_success())
+        };
+        matches!(select_cancel(fut, cancel).await, Ok(Ok(true)))
+    }
+
     async fn try_health(&self, cancel: &AtomicBool) -> Result<bool, Box<dyn std::error::Error>> {
         let fut = async {
             let resp = self.http.get(format!("{}/api/tags", self.endpoint)).send().await?;

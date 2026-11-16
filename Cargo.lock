@@ -45,6 +45,7 @@ version = "0.1.0"
 dependencies = [
  "activity-monitor-core",
  "jiff",
+ "serde_json",
  "tokio",
  "tracing",
  "uuid",
