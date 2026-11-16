@@ -1,0 +1,44 @@
+name: CI (Rust workspace)
+
+on:
+  push:
+    branches: [rust-release]
+  pull_request:
+    branches: [rust-release]
+
+jobs:
+  test-and-build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: cargo test --workspace
+        shell: pwsh
+        run: cargo test --workspace
+
+      - name: cargo build --release --workspace
+        shell: pwsh
+        run: cargo build --release --workspace
+
+      - name: Smoke — MCP server answers server/discover over stdio
+        shell: pwsh
+        run: |
+          $req = '{"jsonrpc":"2.0","id":1,"method":"server/discover","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28"}}}'
+          $resp = $req | & ".\target\release\activity-monitor-mcp.exe"
+          if (-not ($resp -match '"supportedVersions"' -and $resp -match '2026-07-28')) {
+            Write-Error "MCP stdio smoke failed: $resp"
+            exit 1
+          }
+          Write-Host "MCP smoke OK: $resp"
+
+      - name: Smoke — CLI prints help
+        shell: pwsh
+        run: |
+          & ".\target\release\activity-monitor-cli.exe" --help | Select-Object -First 3
+          if ($LASTEXITCODE -ne 0) { exit 1 }

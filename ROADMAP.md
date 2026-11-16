@@ -95,10 +95,13 @@ the original .NET version.
 - One-folder deploy, rollback by switching one shortcut
 
 ### Next — the following 1–3 months
-- **Verified on a clean machine, every code change tested automatically.**
-  Real-Ollama end-to-end run plus a Windows-service install drill on a fresh
-  VM; CI on every push running the test suite and the golden diff against the
-  .NET CLI.
+- **Every code change tested automatically.** CI (`.github/workflows/ci.yml`,
+  windows runner, every push/PR to `rust-release`) runs `cargo test
+  --workspace`, the release build, and MCP/CLI smoke tests. The golden diff
+  against the .NET CLI stays a manual gate until the runner image carries the
+  dotnet SDK.
+- **Verified on a clean machine.** Real-Ollama end-to-end run plus a
+  Windows-service install drill on a fresh VM.
 - **You choose how often captures happen.** Move the periodic-capture and
   event-throttle intervals into `appsettings.json`. (Report ordering now
   matches the old version byte-for-byte via ICU culture-aware sort — done
