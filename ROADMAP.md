@@ -107,12 +107,14 @@ the original .NET version.
   manual gate until the runner image carries the dotnet SDK.
 - **Verified on a clean machine.** Real-Ollama end-to-end run plus a
   Windows-service install drill on a fresh VM.
+
+### Later — when there is evidence it's worth it
 - **A capture method that matches the old README's promise.** Optional Windows
   Graphics Capture mode behind a config flag (the original docs described WGC;
   the C# code actually used GDI — see RELEASE_NOTES). Vetted backend:
-  `windows-capture` crate; BitBlt stays the default path.
-
-### Later — when there is evidence it's worth it
+  `windows-capture` crate; BitBlt stays the default path. Deferred 2026-11-17:
+  multi-monitor GDI covers the actual gap; WGC needs a desktop session to
+  verify consent/border behavior properly.
 - **See your day, don't just query it.** A local read-only web page over the
   database, replacing the CLI for browsing.
 - **Keep the frames, keep as much history as you want.** Optional frame
