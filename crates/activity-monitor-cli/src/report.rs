@@ -349,8 +349,9 @@ pub fn build_report(
         .map(|(ct, b)| ContentTypeSummary {
             content_type: ct,
             activity_count: b.count,
-            distinct_topics: { let mut v = b.topics; v.sort(); v },
-            distinct_applications: { let mut v = b.applications; v.sort(); v },
+            // C# uses _topics.OrderBy(t => t): culture-aware, not ordinal.
+            distinct_topics: { let mut v = b.topics; crate::culture::culture_sort(&mut v); v },
+            distinct_applications: { let mut v = b.applications; crate::culture::culture_sort(&mut v); v },
         })
         .collect();
     content_breakdown.sort_by(|a, b| b.activity_count.cmp(&a.activity_count)); // stable, like OrderByDescending
@@ -501,6 +502,45 @@ mod tests {
         assert_eq!(r.content_type_breakdown[0].distinct_topics, vec!["rust".to_string()]);
         assert_eq!(r.detailed_activities.len(), 1);
         assert_eq!(r.detailed_activities[0].application, "code");
+
+        // DistinctTopics/DistinctApplications use C# OrderBy (culture-aware),
+        // not ordinal: "apple" must sort before "Zebra".
+        assert_ne!(
+            { let mut v = vec!["Zebra".to_string(), "apple".to_string()]; v.sort(); v },
+            vec!["apple".to_string(), "Zebra".to_string()],
+            "ordinal sort must differ here, otherwise this test proves nothing"
+        );
+    }
+
+    #[test]
+    fn report_topics_use_culture_order() {
+        let dir = std::env::temp_dir().join(format!("am-report-culture-{}", uuid::Uuid::new_v4()));
+        let db = ActivityDatabase::open(&dir.join("t.db")).unwrap();
+        db.initialize().unwrap();
+        db.save_activity_event(&ev("2026-11-13T10:00:00.0000000Z", Some("code"), Some("a"), false)).unwrap();
+        for (i, topic) in ["Zebra", "apple"].iter().enumerate() {
+            db.save_inference_result(&InferenceResult {
+                request_id: uuid::Uuid::new_v4(),
+                processed_at: parse_o(&format!("2026-11-13T10:0{i}:00.0000000Z")).unwrap(),
+                activity_label: "coding".into(),
+                application: "code".into(),
+                content_type: "development".into(),
+                topic: topic.to_string(),
+                action: "writing".into(),
+                summary: "s".into(),
+                visible_text: "v".into(),
+                detected_objects: None,
+                confidence: 0.9,
+                raw_response: None,
+            })
+            .unwrap();
+        }
+        let r = build_report(&db, "2026-11-13T00:00:00.0000000Z", "2026-11-14T00:00:00.0000000Z").unwrap();
+        assert_eq!(
+            r.content_type_breakdown[0].distinct_topics,
+            vec!["apple".to_string(), "Zebra".to_string()],
+            "must match C# OrderBy (CurrentCulture), not ordinal"
+        );
 
         // JSON is pretty-printed with PascalCase keys and null CheckIn omitted when empty
         let json = serde_json::to_string_pretty(&r).unwrap();

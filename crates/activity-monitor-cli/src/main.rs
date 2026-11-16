@@ -1,5 +1,6 @@
 use std::process::ExitCode;
 
+mod culture;
 mod llm;
 mod report;
 

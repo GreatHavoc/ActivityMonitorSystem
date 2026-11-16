@@ -77,8 +77,9 @@ the original .NET version.
   `sc.exe` — use the Startup-shortcut mode for now
 - AI inference verified against a local stand-in; watch the first inference
   row on a real machine once
-- Cosmetic only: topic lists in the standard JSON report can be ordered
-  differently than the old version when counts tie
+- Report topic/app lists now sort culture-aware (ICU collator at the Windows
+  user locale) exactly like the .NET `OrderBy` — the former tie-order
+  cosmetic difference is fixed (2026-11-17)
 - Capture intervals (3 min periodic / 10 s event throttle) are fixed, and
   capture covers the primary screen only
 
@@ -99,8 +100,9 @@ the original .NET version.
   VM; CI on every push running the test suite and the golden diff against the
   .NET CLI.
 - **You choose how often captures happen.** Move the periodic-capture and
-  event-throttle intervals into `appsettings.json`; make report ordering
-  match the old version byte-for-byte in all edge cases (ICU sort).
+  event-throttle intervals into `appsettings.json`. (Report ordering now
+  matches the old version byte-for-byte via ICU culture-aware sort — done
+  2026-11-17.)
 - **All your screens, not just the primary one.** Multi-monitor capture, plus
   an optional Windows Graphics Capture mode behind a config flag (the capture
   method the original docs promised).
