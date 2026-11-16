@@ -109,12 +109,13 @@ the original .NET version.
   Windows-service install drill on a fresh VM.
 
 ### Later — when there is evidence it's worth it
-- **A capture method that matches the old README's promise.** Optional Windows
-  Graphics Capture mode behind a config flag (the original docs described WGC;
-  the C# code actually used GDI — see RELEASE_NOTES). Vetted backend:
-  `windows-capture` crate; BitBlt stays the default path. Deferred 2026-11-17:
-  multi-monitor GDI covers the actual gap; WGC needs a desktop session to
-  verify consent/border behavior properly.
+- ~~**A capture method that matches the old README's promise.**~~ **Rejected
+  2026-11-17 (stealth requirement):** WGC always shows the OS consent picker on
+  first use and draws a capture border around the captured item — user-visible
+  by design and not suppressible in a normal process. GDI `BitBlt` is silent:
+  no border, no notification, nothing on screen. Decision: GDI (now
+  multi-monitor via `CaptureAllMonitors`) is the permanent capture path; WGC
+  is off the roadmap.
 - **See your day, don't just query it.** A local read-only web page over the
   database, replacing the CLI for browsing.
 - **Keep the frames, keep as much history as you want.** Optional frame
