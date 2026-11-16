@@ -45,6 +45,13 @@ pub struct CaptureSettings {
     // C# class default is 30; the shipped appsettings.json says 1.
     #[serde(default = "d_max_frames")]
     pub max_frames_per_capture: i64,
+    // Hardcoded in C# ActivityMonitorService (TimeSpan.FromMinutes(3) /
+    // TimeSpan.FromSeconds(10)); configurable since the Rust port, with
+    // defaults that preserve the C# behavior exactly.
+    #[serde(default = "d_periodic_capture_interval")]
+    pub periodic_capture_interval_seconds: i64,
+    #[serde(default = "d_min_event_capture_interval")]
+    pub min_event_capture_interval_seconds: i64,
 }
 
 impl Default for CaptureSettings {
@@ -140,6 +147,8 @@ fn d_idle_threshold() -> i64 { 300 }
 fn d_frame_rate() -> i64 { 1 }
 fn d_max_duration() -> i64 { 30 }
 fn d_max_frames() -> i64 { 30 }
+fn d_periodic_capture_interval() -> i64 { 180 }
+fn d_min_event_capture_interval() -> i64 { 10 }
 fn d_true() -> bool { true }
 fn d_ollama_endpoint() -> String { "http://localhost:11434".into() }
 fn d_ollama_model() -> String { "qwen3-vl:2b".into() }
@@ -176,6 +185,9 @@ mod tests {
         let s = app.activity_monitor;
         assert_eq!(s.sampling_interval_seconds, 5);
         assert_eq!(s.capture_settings.max_frames_per_capture, 1);
+        // keys absent from the legacy file -> C# hardcoded values
+        assert_eq!(s.capture_settings.periodic_capture_interval_seconds, 180);
+        assert_eq!(s.capture_settings.min_event_capture_interval_seconds, 10);
         // legacy typo key still lands on max_event_age_days
         assert_eq!(s.storage.max_event_age_days, 90);
         // 0 in the file is the old "infinite" sentinel -> effective timeout is 120 s
@@ -188,6 +200,8 @@ mod tests {
         assert_eq!(s.sampling_interval_seconds, 5);
         assert_eq!(s.idle_threshold_seconds, 300);
         assert_eq!(s.capture_settings.max_frames_per_capture, 30);
+        assert_eq!(s.capture_settings.periodic_capture_interval_seconds, 180);
+        assert_eq!(s.capture_settings.min_event_capture_interval_seconds, 10);
         assert_eq!(s.ollama_endpoint, "http://localhost:11434");
         assert_eq!(s.ollama_model, "qwen3-vl:2b");
         assert_eq!(s.queue_settings.max_concurrent_tasks, 4);

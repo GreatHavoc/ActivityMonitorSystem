@@ -66,7 +66,8 @@ Edit `publish2\appsettings.json` (loaded from the exe's folder):
     "CaptureSettings": {
       "FrameRate": 1, "MaxDurationSeconds": 30,
       "TriggerOnFocusChange": true, "TriggerOnIdleResume": true,
-      "MaxFramesPerCapture": 1
+      "MaxFramesPerCapture": 1,
+      "PeriodicCaptureIntervalSeconds": 180, "MinEventCaptureIntervalSeconds": 10
     },
     "OllamaEndpoint": "http://localhost:11434",
     "OllamaModel": "qwen3-vl:2b",
@@ -85,7 +86,9 @@ Edit `publish2\appsettings.json` (loaded from the exe's folder):
 `DatabasePath` is relative to the working directory, so run the service from
 the `publish2` folder (the CLI resolves `.\Data\ActivityData.db` first).
 `ProcessingTimeoutSeconds: 0` means the 120 s default (the C# code left the
-HTTP timeout infinite). Logs go to `<exe_dir>\Logs\`.
+HTTP timeout infinite). `PeriodicCaptureIntervalSeconds` / `MinEventCaptureIntervalSeconds`
+were hardcoded to 3 min / 10 s in the C# service and are now configurable
+(defaults keep the old behavior). Logs go to `<exe_dir>\Logs\`.
 
 ## CLI usage
 

@@ -21,10 +21,6 @@ use uuid::Uuid;
 
 mod bootstrap;
 
-/// Hardcoded in C# (ActivityMonitorService): periodic capture every 3 minutes,
-/// 10 s throttle on event-based captures.
-const PERIODIC_CAPTURE_INTERVAL: Duration = Duration::from_secs(3 * 60);
-const MIN_EVENT_CAPTURE_INTERVAL: Duration = Duration::from_secs(10);
 const ERROR_BACKOFF: Duration = Duration::from_secs(5);
 
 static SETTINGS: OnceLock<ActivityMonitorSettings> = OnceLock::new();
@@ -165,10 +161,15 @@ async fn iteration(
     next_compaction: &mut Instant,
     compact_interval: Duration,
 ) -> Result<(), String> {
-    // Periodic capture for continuous monitoring
-    if last_periodic.map_or(true, |t| t.elapsed() >= PERIODIC_CAPTURE_INTERVAL) {
+    // Periodic capture for continuous monitoring (C# hardcoded 3 min; now
+    // configurable via CaptureSettings.PeriodicCaptureIntervalSeconds)
+    let periodic_interval =
+        Duration::from_secs(settings.capture_settings.periodic_capture_interval_seconds.max(0) as u64);
+    let min_event_interval =
+        Duration::from_secs(settings.capture_settings.min_event_capture_interval_seconds.max(0) as u64);
+    if last_periodic.map_or(true, |t| t.elapsed() >= periodic_interval) {
         tracing::info!("Triggering periodic capture for continuous monitoring");
-        trigger_capture(queue, "periodic_monitoring", RequestPriority::Normal, last_capture);
+        trigger_capture(queue, "periodic_monitoring", RequestPriority::Normal, last_capture, min_event_interval);
         *last_periodic = Some(Instant::now());
     }
 
@@ -178,7 +179,7 @@ async fn iteration(
     if *was_idle && !is_idle {
         tracing::info!("User resumed from idle");
         if settings.capture_settings.trigger_on_idle_resume {
-            trigger_capture(queue, "idle_resume", RequestPriority::High, last_capture);
+            trigger_capture(queue, "idle_resume", RequestPriority::High, last_capture, min_event_interval);
         }
     }
     *was_idle = is_idle;
@@ -208,7 +209,7 @@ async fn iteration(
                     .save_activity_event(&event)
                     .map_err(|e| e.to_string())?;
                 if settings.capture_settings.trigger_on_focus_change {
-                    trigger_capture(queue, "focus_change", RequestPriority::High, last_capture);
+                    trigger_capture(queue, "focus_change", RequestPriority::High, last_capture, min_event_interval);
                 }
                 *last_focused = Some(window_key);
             }
@@ -244,16 +245,18 @@ async fn iteration(
     Ok(())
 }
 
-/// Port of TriggerCaptureAsync: 10 s throttle on event-based captures only.
+/// Port of TriggerCaptureAsync: throttle on event-based captures only
+/// (C# hardcoded 10 s; now CaptureSettings.MinEventCaptureIntervalSeconds).
 fn trigger_capture(
     queue: &Arc<RequestQueueManager>,
     reason: &str,
     priority: RequestPriority,
     last_capture: &mut Option<Instant>,
+    min_event_interval: Duration,
 ) {
     if reason != "periodic_monitoring" {
         if let Some(t) = *last_capture {
-            if t.elapsed() < MIN_EVENT_CAPTURE_INTERVAL {
+            if t.elapsed() < min_event_interval {
                 tracing::debug!("Skipping capture, too soon since last capture");
                 return;
             }

@@ -163,6 +163,7 @@ mod tests {
             trigger_on_focus_change: true,
             trigger_on_idle_resume: true,
             max_frames_per_capture: max_frames,
+            ..Default::default()
         };
         assert_eq!(max_frames(&mk(30, 30, 1)), 30); // 30 vs 30*1
         assert_eq!(max_frames(&mk(1, 30, 1)), 1); // shipped appsettings: 1 frame
@@ -188,6 +189,7 @@ mod tests {
             trigger_on_focus_change: true,
             trigger_on_idle_resume: true,
             max_frames_per_capture: 3,
+            ..Default::default()
         };
         let _serial = crate::CAPTURE_TEST_LOCK.lock().unwrap();
         let cancel = AtomicBool::new(false);
