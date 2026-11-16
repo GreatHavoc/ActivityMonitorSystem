@@ -98,6 +98,11 @@ the original .NET version.
   the old hardcoded values) and byte-exact report ordering (ICU sort)
 - Multi-monitor capture: `CaptureAllMonitors: true` grabs the whole virtual
   screen (all displays) in one frame instead of just the primary
+- Verified end-to-end on a clean install (2026-11-17): fresh folder + real
+  Ollama 0.40.16 + `qwen3-vl:2b` — capture → inference → DB → CLI → MCP all
+  work; `install-service.ps1` covers the `sc.exe` install (needs an elevated
+  shell). Drill also caught and fixed a real bug: `num_predict` 1024 → 8192
+  (the model's thinking budget otherwise starves the answer)
 
 ### Next — the following 1–3 months
 - **Every code change tested automatically.** CI (`.github/workflows/ci.yml`,
@@ -105,9 +110,6 @@ the original .NET version.
   --workspace`, the release build, and MCP/CLI smoke tests (green since
   2026-11-17, run 43955153804). The golden diff against the .NET CLI stays a
   manual gate until the runner image carries the dotnet SDK.
-- **Verified on a clean machine.** Real-Ollama end-to-end run plus a
-  Windows-service install drill on a fresh VM.
-
 ### Later — when there is evidence it's worth it
 - ~~**A capture method that matches the old README's promise.**~~ **Rejected
   2026-11-17 (stealth requirement):** WGC always shows the OS consent picker on

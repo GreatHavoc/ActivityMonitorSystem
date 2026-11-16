@@ -52,7 +52,8 @@ Or just use the prebuilt `publish2\` folder.
 3. Name it "Activity Monitor"
 
 To run as a real Windows service instead: `activity-monitor-service.exe --service`
-(installed via `sc create`), or run it in a console with Ctrl+C to stop.
+(installed via `install-service.ps1` — run it elevated — or `sc create`),
+or run it in a console with Ctrl+C to stop.
 
 ## Configuration
 
@@ -87,7 +88,8 @@ Edit `publish2\appsettings.json` (loaded from the exe's folder):
 `DatabasePath` is relative to the working directory, so run the service from
 the `publish2` folder (the CLI resolves `.\Data\ActivityData.db` first).
 `ProcessingTimeoutSeconds: 0` means the 120 s default (the C# code left the
-HTTP timeout infinite). `PeriodicCaptureIntervalSeconds` / `MinEventCaptureIntervalSeconds`
+HTTP timeout infinite); raise it (e.g. 600) on slow machines where the vision
+model is cold — the clean-install drill needed it when Ollama was busy. `PeriodicCaptureIntervalSeconds` / `MinEventCaptureIntervalSeconds`
 were hardcoded to 3 min / 10 s in the C# service and are now configurable
 (defaults keep the old behavior). `CaptureAllMonitors: true` captures the
 whole virtual screen (all monitors) in one frame instead of just the primary

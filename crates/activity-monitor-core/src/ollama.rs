@@ -118,7 +118,10 @@ impl OllamaClient {
             ],
             "stream": false,
             "think": false,
-            "options": { "temperature": 0.3, "top_p": 0.9, "num_predict": 1024 }
+            // num_predict 8192: the qwen3-vl thinking renderer ignores think:false on
+            // Ollama 0.40.x and burns 600-2700 tokens on <think>; 1024 (the C# value)
+            // left zero budget for the answer -> empty content (P4 drill finding).
+            "options": { "temperature": 0.3, "top_p": 0.9, "num_predict": 8192 }
         });
         let fut = async {
             let resp = self
@@ -229,7 +232,8 @@ pub fn chat_request_body(model: &str, images: Vec<String>) -> Value {
         "stream": false,
         "think": false,
         "format": structured_format(),
-        "options": { "temperature": 0.1, "top_p": 0.9, "num_predict": 1024 }
+        // see chat_text: qwen3-vl thinking needs headroom above the C# 1024
+        "options": { "temperature": 0.1, "top_p": 0.9, "num_predict": 8192 }
     })
 }
 
@@ -412,7 +416,7 @@ mod tests {
         assert_eq!(body["messages"][0]["images"], json!(["aGk="]));
         assert_eq!(body["options"]["temperature"], 0.1);
         assert_eq!(body["options"]["top_p"], 0.9);
-        assert_eq!(body["options"]["num_predict"], 1024);
+        assert_eq!(body["options"]["num_predict"], 8192);
         assert_eq!(body["format"]["type"], "object");
         assert_eq!(body["format"]["properties"]["content_type"]["enum"][0], "code");
         assert_eq!(body["format"]["required"].as_array().unwrap().len(), 8);
