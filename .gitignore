@@ -1,6 +1,9 @@
 # .NET
 bin/
 obj/
+
+# Rust
+/target/
 publish/
 *.user
 *.suo

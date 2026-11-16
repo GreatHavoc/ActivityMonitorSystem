@@ -1,0 +1,4 @@
+# Static CRT so the release executables have no vcruntime/ucrt DLL dependencies
+# (the .NET publish needed the .NET 8 runtime installed; the Rust build must not).
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]

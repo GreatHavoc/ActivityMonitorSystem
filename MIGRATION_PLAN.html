@@ -1,0 +1,404 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Activity Monitor — Rust Migration Plan</title>
+<style>
+  :root{
+    --paper:#141519; --note:#1d1f24; --note2:#22242a; --line:#33363e;
+    --ink:#e8e6df; --muted:#9aa0a6; --rule:#33363e;
+    --ok:#6fc48a; --warn:#d3b06a; --bad:#e08a80; --blue:#8fb0e0; --violet:#b9a1e0;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--paper);color:var(--ink);font-family:"Segoe UI",system-ui,-apple-system,sans-serif;line-height:1.65;padding:48px 20px}
+  .wrap{max-width:980px;margin:0 auto}
+  h1{font-size:31px;font-weight:650;letter-spacing:-.01em}
+  .sub{color:var(--muted);margin:6px 0 4px;font-size:15px}
+  .meta{color:var(--muted);font-size:13px;margin-bottom:34px}
+  h2{font-size:15px;text-transform:uppercase;letter-spacing:.14em;font-weight:650;color:var(--muted);margin:46px 0 14px;padding-bottom:8px;border-bottom:1px solid var(--rule)}
+  h3{font-size:15px;margin:22px 0 8px}
+  p{margin:8px 0}
+  .small{font-size:13px;color:var(--muted)}
+  /* sticky note */
+  .sticky{background:var(--note);border:1px solid var(--line);border-radius:2px;padding:20px 24px 22px;position:relative;box-shadow:0 5px 16px rgba(0,0,0,.45);margin-bottom:20px}
+  .sticky::before{content:"";position:absolute;top:-7px;left:50%;transform:translateX(-50%);width:74px;height:14px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.06);border-radius:1px}
+  .sticky.plain::before{display:none}
+  .sticky h4{font-size:14px;font-weight:650;margin-bottom:8px}
+  /* checklist */
+  ul.check{list-style:none;margin:6px 0}
+  ul.check li{position:relative;padding-left:26px;margin:7px 0;font-size:14px}
+  ul.check li::before{content:"";position:absolute;left:0;top:4px;width:13px;height:13px;border:1.5px solid #6b7078;border-radius:2px;background:var(--note2)}
+  ul.check li.done::before{background:var(--ok);border-color:var(--ok)}
+  ul.check li.done::after{content:"";position:absolute;left:4px;top:7px;width:7px;height:4px;border-left:1.7px solid #fff;border-bottom:1.7px solid #fff;transform:rotate(-45deg)}
+  ul.check li.later::before{border-style:dashed}
+  /* labels */
+  .tag{display:inline-block;font-size:10px;font-weight:650;letter-spacing:.08em;text-transform:uppercase;padding:1px 7px;border-radius:2px;border:1px solid;margin-right:7px;vertical-align:1px;white-space:nowrap}
+  .t-done,.t-ok{color:var(--ok);border-color:#2e5240;background:#1b2a22}
+  .t-next{color:var(--muted);border-color:#3a3d45;background:#24262c}
+  .t-bug{color:var(--bad);border-color:#5c332e;background:#2b1d1b}
+  .t-docs{color:var(--violet);border-color:#463a5c;background:#241f31}
+  .t-dead,.t-chg{color:var(--warn);border-color:#5c4d2e;background:#2b2517}
+  .t-perf{color:var(--blue);border-color:#33455e;background:#1b2431}
+  /* tables */
+  table{width:100%;border-collapse:collapse;margin:10px 0 6px;font-size:13.5px}
+  th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);font-weight:650;padding:8px 10px;border-bottom:1px solid var(--rule)}
+  td{padding:8px 10px;border-bottom:1px solid #2a2c33;vertical-align:top}
+  tr:last-child td{border-bottom:none}
+  /* code */
+  code{background:#2a2c33;border:1px solid #3a3d45;border-radius:2px;padding:0 5px;font-family:Consolas,monospace;font-size:12.5px;color:#d8d4c4}
+  pre{background:#282a27;color:#e8e4d8;border-radius:3px;padding:16px 18px;overflow-x:auto;font-family:Consolas,monospace;font-size:12.5px;line-height:1.55;margin:12px 0}
+  pre code{background:none;border:none;padding:0;color:inherit}
+  /* pipeline */
+  .flow{display:flex;flex-wrap:wrap;gap:8px;align-items:stretch;margin:14px 0}
+  .flow .node{flex:1;min-width:140px;background:var(--note2);border:1px solid var(--line);border-radius:2px;padding:11px 12px}
+  .flow .node b{display:block;font-size:13px;margin-bottom:2px}
+  .flow .node span{font-size:11.5px;color:var(--muted);line-height:1.4;display:block}
+  /* phase grid */
+  .phases{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:820px){.phases{grid-template-columns:1fr}}
+  .phase h4{font-size:13.5px;font-weight:650;margin-bottom:2px}
+  .phase .est{font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px}
+  .phase ul.check li{font-size:13px;margin:5px 0}
+  .gate{font-size:12.5px;color:var(--ok);border-top:1px dashed var(--rule);margin-top:10px;padding-top:8px}
+  .gate b{font-weight:650}
+  .total{font-size:15px;margin-top:18px}
+  .total b{font-size:22px;font-weight:650;color:var(--ok)}
+  .note-line{border-left:3px solid var(--warn);background:#2b2517;padding:10px 16px;margin:14px 0;font-size:13.5px;border-radius:0 2px 2px 0}
+  footer{border-top:1px solid var(--rule);margin-top:48px;padding-top:16px;color:var(--muted);font-size:12.5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>Activity Monitor — Rust Migration Plan</h1>
+<div class="sub">Product audit, library selection and migration workplan</div>
+<div class="meta">Document maintained through the migration &nbsp;·&nbsp; last updated 2026-11-16 &nbsp;·&nbsp; all phases complete</div>
+
+<h2>1. Live status</h2>
+<div class="sticky">
+  <ul class="check">
+    <li class="done"><span class="tag t-done">Done</span><b>Environment verified.</b> Rust 1.100.0 with rustup on the user PATH; VS 2022 Build Tools 17.14.45 (MSVC x64 + Windows 11 SDK) for linking; .NET 8.0.428 SDK installed in isolation at <code>C:\Users\Prakhar\dotnet-migration</code>, not on PATH, removable after the migration.</li>
+    <li class="done"><span class="tag t-done">Done</span><b>.NET baseline builds.</b> All four projects compile with zero warnings and zero errors, so golden-diff baselines can be generated.</li>
+    <li class="done"><span class="tag t-done">Done</span><b>Crate research.</b> Eight of nine picks confirmed; one change — chrono replaced by jiff because chrono entered soft-deprecation in 2026.</li>
+    <li class="done"><span class="tag t-done">Done</span><b>Phase 0 — workspace foundation (2026-11-13).</b> Cargo workspace with <code>activity-monitor-core</code> lib + service/cli binaries; appsettings parsing with serde defaults (legacy <code>MaxEventAgeD ays</code> typo key tolerated, unknown keys ignored); console + daily rolling-file logging under the exe dir; shared models; <code>%Y-%m-%dT%H:%M:%S.%7fZ</code> timestamp helper. 5 unit tests green, workspace checks clean, both binaries run.</li>
+    <li class="done"><span class="tag t-done">Done</span><b>Phase 1 — SQLite layer (2026-11-13).</b> <code>activity-monitor-core::db</code>: verbatim DDL + auto-migration (ALTER TABLE), save/query/compact on one long-lived connection, CLI <code>query</code> and <code>stats</code> (clap + tabled). 13 unit tests green. Golden diff vs the .NET CLI on a .NET-seeded DB: all rows identical, and the .NET CLI also reads a Rust-written DB. One intended divergence: <code>stats</code> "Events Today" now counts true local-today (tz-bug fix, audit item 1).</li>
+    <li class="done"><span class="tag t-done">Done</span><b>Phase 2 — read-only CLI (2026-11-14).</b> <code>timeline</code>, <code>detailed</code>, <code>summary</code> ported with verbatim SQL (incl. the JULIANDAY 60-second inference JOIN) and the same truncation/percent rules. 14 unit tests green. Golden diff vs the .NET CLI on the .NET-seeded DB: <code>detailed</code> line-for-line identical, <code>timeline</code> and <code>summary</code> identical rows (only panel/table borders differ). Day-inclusive bounds use local-date-plus-one-day converted to UTC.</li>
+    <li class="done"><span class="tag t-done">Done</span><b>Phase 3 — report v2.0 JSON export (2026-11-14).</b> <code>report</code> ported end-to-end (previous-event lookup, check-in/out clamping, segment accumulation, usage builders, insight-index matching, content-type breakdown, idle backfill). 17 unit tests green. Golden diff vs the .NET CLI on the .NET-seeded DB: canonical JSON <b>identical</b> (excluding <code>GeneratedAtUtc</code>) for a 2-day range, a single day, and an empty range; console check-in/check-out/tracked lines identical; default filename pattern matches. <code>--llm</code> wired in Phase 4 (see below).</li>
+    <li class="done"><span class="tag t-done">Done</span><b>Phase 4 — report --llm, schema 3.0-llm (2026-11-14).</b> <code>llm.rs</code> ports <code>GenerateLlmReportAsync</code> end-to-end: system-process filter, project inference (3 regex path patterns + fallback), hourly breakdown, top activities, significant moments, day patterns, executive summary with narrative/accomplishments/tech keywords. 23 unit tests green. Golden diff vs the .NET CLI on the .NET-seeded DB: canonical JSON <b>identical</b> (excluding <code>GeneratedAtUtc</code>) for 2-day, 1-day and empty ranges; console Schema/Summary/Projects lines identical. v2.0 report regression-checked identical after the refactor.</li>
+    <li class="done"><span class="tag t-done">Done</span><b>Phase 5 — sensors (2026-11-14).</b> <code>core::sensors</code> (windows-only): foreground window / pid / title via user32, process name via <code>QueryFullProcessImageNameW</code> (file stem, matching .NET <code>ProcessName</code>), idle via <code>GetLastInputInfo</code> + <b>GetTickCount64</b> (fixes the C# GetTickCount 49.7-day wrap). 25 unit tests green. Live gate vs the .NET probe on the same desktop: hwnd 67130, pid 5708, title and process name <b>identical</b>; last-input timestamp identical to the second (idle ms differed only by the ~75 s between the two runs).</li>
+    <li class="done"><span class="tag t-done">Done</span><b>Phase 6 — capture (2026-11-14).</b> <code>core::capture</code> (windows-only): GDI <code>BitBlt</code> of the primary screen, BGRA to RGB8, JPEG q75, try-lock skip and frame math ported from <code>CaptureManager</code>. 28 unit tests green incl. a live capture. Encoder note: the <code>image</code> crate's JPEG encoder is hardcoded 4:4:4 (29 percent larger than GDI+ at q75), so encoding uses <code>jpeg-encoder</code>, which defaults to 4:2:0 below q90 like GDI+. Live gate vs the .NET probe on the same desktop: identical 1536x864 dims, size delta 0.8–2.5 percent across runs, decoded mean-abs-diff 0.75–1.06 on a static screen (bytes never compared).</li>
+    <li class="done"><span class="tag t-done">Done</span><b>Phase 7 — Ollama client (2026-11-16).</b> <code>core::ollama</code> ports <code>OllamaInferenceClient</code>: <code>/api/chat</code> with stream/think false, JSON-schema format, options 0.1/0.9/1024, base64 middle frame; <code>/api/tags</code> health with case-insensitive substring match; C#-exact <code>ParseResponse</code> incl. the fallback (label Activity, confidence 0.5, 500-char truncation). Deliberate fix: C# <code>HttpClient.Timeout</code> was infinite — the port applies <code>effective_timeout()</code> (120 s when &lt;= 0). 36 unit tests green incl. one-shot mock-server tests. Live gate vs the .NET probe (llama.cpp b12359 + Qwen3-VL-2B Q4_K_M behind a local Ollama-protocol shim on :11434, since Ollama itself would not install here): health true on both; request bodies canonical-JSON <b>identical</b>; Rust live analyze parsed a structured result end-to-end, the .NET run hit the model token cap and took the same fallback path (unit-tested).</li>
+    <li class="done"><span class="tag t-done">Done</span><b>Phase 8 — queue and manager (2026-11-16).</b> <code>core::queue</code> ports <code>RequestQueueManager</code> + <code>PriorityBlockingCollection</code>: one unbounded channel per priority (Critical first, FIFO within a level), drop-when-full, worker semaphore backpressure, metrics (queued/processing/completed/failed/avg time over last 100 samples), drain-on-stop. Deliberate fixes: the C# capacity check was increment-then-compare (racy) — the port rejects atomically via CAS; the capture lock moved to <code>tokio::sync::Mutex</code> so the future stays <code>Send</code> for spawning. 40 unit tests green, incl. priority-order/FIFO, drop-when-full, and an end-to-end manager test (live capture + mock /api/chat + temp DB, completed=1).</li>
+    <li class="done"><span class="tag t-done">Done</span><b>Phase 9 — service host (2026-11-16).</b> <code>activity-monitor-service</code> ports <code>Program.cs</code> + <code>ExecuteAsync</code>: console mode by default, <code>--service</code> runs under the Windows service dispatcher (name "Activity Monitor Service", STOP handled). Loop = periodic capture (3 min, Normal, first iteration immediate), idle-resume trigger (High), focus-change event row + trigger (High, key <code>pid:title</code>), idle event rows, startup + hourly compaction (wired in; dead in C#), 10 s throttle on event captures, 5 s error backoff, graceful queue drain on stop, exit 1 on fatal startup error. Fixes: logs at <code>&lt;exe_dir&gt;/Logs</code> instead of hardcoded <code>C:\ActivityMonitor\publish\Logs</code>; DB path resolved against CWD as in C#. Live gate passed: with llama.cpp stand-in up, periodic capture → frames → /api/chat → parsed row in InferenceResults; with it down, connection-refused fails fast (no infinite hang), loop keeps running, idle rows still written with "O" UTC timestamps.</li>
+    <li class="done"><span class="tag t-done">Done</span><b>Phase 10 — packaging and docs (2026-11-16).</b> <code>.cargo/config.toml</code> sets <code>crt-static</code> for the MSVC target — release exes import only system DLLs (verified: no VCRUNTIME/ucrt imports), so no .NET runtime or VC++ redist is needed. <code>deploy.ps1</code> builds release and populates <code>publish2/</code> (service + CLI + corrected <code>appsettings.json</code> with relative <code>Data\ActivityData.db</code> and the fixed <code>MaxEventAgeDays</code> key); <code>publish/</code> untouched. <code>RELEASE_NOTES.md</code> lists the 10 fixed C# defects. README/SETUP rewritten for the Rust build; <code>cleanup.bat</code> now cargo-based. Gates passed: fresh-machine runbook (copied publish2 to a clean dir — service created <code>Data\ActivityData.db</code> + <code>Logs\</code> next to the exe, CLI <code>stats</code> read the same DB) and release-binary golden diff vs .NET CLI on the seed DB: standard and LLM reports both MATCH (canonical JSON, excluding GeneratedAtUtc).</li>
+    <li class="done"><span class="tag t-done">Done</span><b>Phase 11 — soak and rollback drill, compressed to ~1 h (2026-11-16).</b> .NET service then Rust service, 15 min each, accelerated capture config, both writing the <i>same</i> <code>Data\ActivityData.db</code> with the Ollama stand-in up: 335 events (334 idle + 1 live focus_change, "O" UTC timestamps) and 5 inference rows, no corruption, both builds interleaved on one file. Cross-check with both CLIs on the combined DB: LLM report MATCH; standard report identical except a tie-order difference in <code>DistinctTopics</code> (C# culture-aware <code>OrderBy</code> vs Rust ordinal sort — documented in RELEASE_NOTES). Rollback drill: both builds live side by side (<code>publish/</code> .NET, <code>publish2/</code> Rust); rollback = editing one startup shortcut (no live install exists on this machine, so the drill was verified structurally, not by switching). Note: the .NET service got 0 inference rows in the soak because the llama.cpp shim resets its connections under the .NET HttpClient — a stand-in artifact; the .NET inference path itself was proven against the shim in Phase 7.</li>
+  </ul>
+</div>
+
+<h2>2. Scope — what the system does today</h2>
+<p>Windows-only background application. It samples window focus and idle state, captures a screen frame on triggers, sends it to a local vision model (Ollama, qwen3-vl:2b), stores the results in SQLite, and exposes a CLI that renders human and LLM-oriented reports.</p>
+
+<div class="flow">
+  <div class="node"><b>Win32 sensors</b><span>Foreground window, process, title, idle time</span></div>
+  <div class="node"><b>Capture</b><span>GDI screen grab, one JPEG at quality 75</span></div>
+  <div class="node"><b>Ollama</b><span>Structured JSON label per frame</span></div>
+  <div class="node"><b>SQLite</b><span>Events and insights, ISO-8601 UTC text</span></div>
+  <div class="node"><b>CLI</b><span>Schema v2.0 JSON and 3.0-llm narrative reports</span></div>
+</div>
+
+<ul class="check">
+  <li>Four .NET projects: Service (host loop), Core (sensors, capture, inference, queue, storage), Common (models, settings), CLI (2,413 lines, Spectre.Console).</li>
+  <li>Service runs as a console process or a Windows service with <code>--service</code>; autostart via a <code>shell:startup</code> shortcut.</li>
+  <li>Sampling every <code>SamplingIntervalSeconds</code> (default 5 s); one database row per tick while idle (about 720 rows per hour).</li>
+  <li>Capture triggers: periodic every 3 minutes (hardcoded), focus change and idle resume throttled to once per 10 seconds (hardcoded).</li>
+  <li>Frame count is <code>min(MaxFramesPerCapture, MaxDurationSeconds x FrameRate)</code>; the shipped configuration yields exactly one frame.</li>
+  <li>Inference posts to <code>/api/chat</code> with <code>stream:false</code>, <code>think:false</code>, a JSON-schema format, temperature 0.1, top_p 0.9, num_predict 1024, and only the middle frame as base64. HTTP timeout is infinite; health check is <code>GET /api/tags</code>.</li>
+  <li>Queue: four priority levels (Low to Critical), unbounded channels with a manual capacity counter, four concurrent workers, drop when full.</li>
+  <li>Storage: new SQLite connection per operation; timestamps written as <code>DateTime.UtcNow.ToString("O")</code> text; date filtering relies on lexical <code>BETWEEN</code>.</li>
+  <li>CLI resolves the database at <code>./Data/ActivityData.db</code>, then <code>%ProgramData%\ActivityMonitor\Data\ActivityData.db</code>.</li>
+  <li>Deployment is a copied <code>publish/</code> folder plus a startup shortcut; logs are hardcoded to <code>C:\ActivityMonitor\publish\Logs\</code>.</li>
+</ul>
+
+<h3>Storage contract (must remain byte-compatible)</h3>
+<pre><code>CREATE TABLE ActivityEvents (Id INTEGER PRIMARY KEY AUTOINCREMENT, Timestamp TEXT NOT NULL,
+    EventType TEXT NOT NULL, ProcessId INTEGER, ProcessName TEXT, WindowTitle TEXT,
+    IsIdle INTEGER NOT NULL, IdleDurationSeconds INTEGER, Metadata TEXT);
+CREATE TABLE InferenceResults (Id INTEGER PRIMARY KEY AUTOINCREMENT, RequestId TEXT NOT NULL UNIQUE,
+    ProcessedAt TEXT NOT NULL, ActivityLabel TEXT NOT NULL, Application TEXT, ContentType TEXT,
+    Topic TEXT, Action TEXT, Summary TEXT NOT NULL, VisibleText TEXT,
+    Confidence REAL NOT NULL, DetectedObjects TEXT, RawResponse TEXT);
+-- Indexes: ActivityEvents(Timestamp, EventType, ProcessName); InferenceResults(ProcessedAt, ActivityLabel)
+-- Startup migration: ALTER TABLE ADD COLUMN for Application, ContentType, Topic, Action, VisibleText</code></pre>
+
+<h2>3. Audit findings — checklist</h2>
+<p class="small">Each defect is fixed during the port and recorded in release notes. Parity applies everywhere else.</p>
+
+<div class="sticky">
+  <ul class="check">
+    <li><span class="tag t-bug">Bug</span><span class="tag t-ok">Fixed Phase 1</span><b>Timezone comparison breaks on non-UTC machines.</b> <code>timeline</code> and <code>query</code> bind local-offset strings into <code>BETWEEN</code> against Z-suffixed UTC timestamps; ranges are silently wrong. Fix: convert local dates to UTC in every command (done in <code>query</code>/<code>stats</code>/<code>timeline</code>/<code>detailed</code>/<code>summary</code> via jiff system-tz conversion).</li>
+    <li><span class="tag t-bug">Bug</span><b>Compaction never runs.</b> <code>CompactOldEventsAsync()</code> has no callers, so events are never purged. <code>appsettings.json</code> also contains a typo key, <code>"MaxEventAgeD ays"</code>, which is silently ignored. Fix: daily compaction job; serde alias for the legacy key.</li>
+    <li><span class="tag t-bug">Bug</span><b>Hung inference freezes a worker.</b> <code>HttpClient.Timeout</code> is infinite and <code>ProcessingTimeoutSeconds</code> is never read. Fix: real configurable timeout, default 120 s.</li>
+    <li><span class="tag t-bug">Bug</span><b>Idle time wraps after roughly 49.7 days of uptime.</b> 32-bit tick arithmetic. Fix: <code>GetTickCount64</code>.</li>
+    <li><span class="tag t-docs">Docs</span><b>README describes Windows.Graphics.Capture; the code uses GDI.</b> Consent UI and capture border are documented but absent; multi-monitor and HiDPI are unsupported. Decision: port GDI exactly; WGC is a follow-up ticket.</li>
+    <li><span class="tag t-docs">Docs</span><b>README is stale elsewhere.</b> It lists files that do not exist, claims a .NET 9 build with a .NET 8 runtime, and advertises <code>dotnet test</code> although no test projects exist. Fix: rewrite README and SETUP in Phase 10.</li>
+    <li><span class="tag t-dead">Dead</span><b>Dead configuration.</b> <code>HighPriorityThreshold</code>, <code>RetainFrames</code> and <code>CompactionIntervalHours</code> are never read. Decision: drop them; keep <code>ProcessingTimeoutSeconds</code> and implement it.</li>
+    <li><span class="tag t-perf">Perf</span><b>Priority queue race.</b> Unbounded channels plus an <code>Interlocked</code> counter; <code>Clear()</code> leaves semaphore permits behind. Fix: bounded <code>tokio::sync::mpsc</code> per priority level.</li>
+    <li><span class="tag t-perf">Perf</span><b>Hardcoded log path.</b> Fix: logs under the executable directory or a configuration key.</li>
+    <li><span class="tag t-perf">Perf</span><b>Connection churn.</b> A new SQLite connection per operation, default journal mode. Fix: one guarded connection; optional WAL after a compatibility check.</li>
+  </ul>
+</div>
+
+<h2>4. Target architecture and libraries</h2>
+<p>One library crate plus two binaries. The four-project .NET split is unnecessary for code we fully own.</p>
+<pre><code>Cargo.toml                         # workspace
+crates/
+  activity-monitor-core/           # models, config, db, sensors, capture, inference, queue
+  activity-monitor-service/        # bin: host loop
+  activity-monitor-cli/            # bin: all CLI commands</code></pre>
+
+<h3>Library mapping</h3>
+<table>
+  <tr><th>Area</th><th>.NET today</th><th>Rust</th><th>Rationale</th></tr>
+  <tr><td>Win32 FFI</td><td>P/Invoke user32, kernel32</td><td><code>windows</code> 0.62</td><td>Official bindings; matches windows-capture's requirement</td></tr>
+  <tr><td>Process name</td><td><code>Process.ProcessName</code></td><td><code>QueryFullProcessImageNameW</code></td><td>Exact parity: filename without extension</td></tr>
+  <tr><td>Capture</td><td>System.Drawing bitmap, JPEG 75</td><td><code>BitBlt</code> + <code>image</code></td><td>Pure-Rust zune-jpeg, same quality parameter</td></tr>
+  <tr><td>SQLite</td><td>Microsoft.Data.Sqlite</td><td><code>rusqlite</code> (bundled)</td><td>Verbatim SQL including the JULIANDAY join; reads and writes the existing database</td></tr>
+  <tr><td>HTTP</td><td>HttpClient</td><td><code>reqwest</code></td><td>Async, schannel TLS on Windows, no native build dependencies</td></tr>
+  <tr><td>Async and concurrency</td><td>Task, Channels, SemaphoreSlim</td><td><code>tokio</code>, bounded <code>mpsc</code></td><td>Real backpressure replaces the hand-rolled counter</td></tr>
+  <tr><td>Service host</td><td>Extensions.Hosting.WindowsServices</td><td><code>windows-service</code></td><td>SCM start and stop with the same <code>--service</code> flag</td></tr>
+  <tr><td>JSON and config</td><td>System.Text.Json, appsettings</td><td><code>serde</code>, <code>serde_json</code></td><td>Same appsettings shape; identical field order</td></tr>
+  <tr><td>Logging</td><td>Serilog</td><td><code>tracing</code> + <code>tracing-appender</code></td><td>Daily rolling file, 30 retained, configurable path</td></tr>
+  <tr><td>CLI parsing</td><td>Manual argument loops</td><td><code>clap</code></td><td>Per-command help, typed values, exit codes</td></tr>
+  <tr><td>Terminal output</td><td>Spectre.Console</td><td><code>tabled</code> + <code>owo-colors</code></td><td>Accepted cosmetic drift; JSON artifacts are the contract</td></tr>
+  <tr><td>Regex</td><td>System.Text.RegularExpressions</td><td><code>regex</code></td><td>Project-inference patterns port verbatim</td></tr>
+  <tr><td>Time</td><td><code>DateTime</code>, "O", ToLocalTime</td><td><code>jiff</code> 0.2.43 + <code>jiff-tzdb</code></td><td><code>%7f</code> produces exactly seven fractional digits, matching "O"</td></tr>
+  <tr><td>IDs and base64</td><td>Guid, Convert</td><td><code>uuid</code>, <code>base64</code></td><td>Request identifiers; image payloads</td></tr>
+  <tr><td>Hosting and DI</td><td>Extensions.Hosting, DI</td><td>Tokio tasks and a plain main</td><td>DI is ceremony for six classes we own</td></tr>
+</table>
+
+<h3>Crate research outcome (November 2026)</h3>
+<table>
+  <tr><th>Crate</th><th>Latest</th><th>Assessment</th></tr>
+  <tr><td><code>rusqlite</code></td><td>0.40.2</td><td><span class="tag t-ok">Confirmed</span>Bundles SQLite 3.53.2. Independent 2026 comparisons recommend it for SQLite-only embedded and CLI workloads. Do not combine with sqlx; both link <code>libsqlite3-sys</code>.</td></tr>
+  <tr><td><code>jiff</code></td><td>0.2.43</td><td><span class="tag t-chg">Changed</span>chrono is being wound down (chronotope issue 1768, January 2026). jiff provides exact "O" formatting, the narrative date templates, and a bundled timezone database for Windows.</td></tr>
+  <tr><td><code>image</code></td><td>0.25.10</td><td><span class="tag t-ok">Confirmed</span><code>JpegEncoder::new_with_quality(writer, 75)</code>; 4:2:2 subsampling in both stacks. Notes: convert BGRA to RGB8 first; a buffer-size mismatch panics; enable only the jpeg feature.</td></tr>
+  <tr><td><code>windows-service</code></td><td>0.8.1</td><td><span class="tag t-ok">Confirmed</span>Maintained by Mullvad; the only practical option.</td></tr>
+  <tr><td><code>windows</code></td><td>0.62.x</td><td><span class="tag t-ok">Confirmed</span>Pin 0.62 to match windows-capture 2.0 and avoid duplicate versions.</td></tr>
+  <tr><td><code>windows-capture</code></td><td>2.0.1</td><td><span class="tag t-ok">Confirmed</span>Viable backend for the optional WGC upgrade. Single maintainer, so BitBlt remains the shipped path.</td></tr>
+  <tr><td><code>reqwest</code>, <code>clap</code></td><td>0.13.5, 4.6.7</td><td><span class="tag t-ok">Confirmed</span>Ecosystem defaults; no alternatives considered further.</td></tr>
+  <tr><td><code>tabled</code></td><td>0.22.0</td><td><span class="tag t-ok">Confirmed</span>Best table API; the ansi feature provides color support.</td></tr>
+  <tr><td><code>tracing</code> stack</td><td>appender 0.2.5</td><td><span class="tag t-ok">Confirmed</span>Flush the non-blocking writer on graceful shutdown; an abrupt kill can lose the final lines.</td></tr>
+</table>
+
+<h2>5. Advantages of the Rust version</h2>
+<ul class="check">
+  <li>Single static executable of roughly 4 to 8 MB; no .NET runtime, no redistributable, no administrator rights. The current self-contained publish is around 70 MB.</li>
+  <li>Idle memory target below 20 MB against a current claim of about 50 MB; no garbage collector or JIT.</li>
+  <li>Explicit error handling. <code>Result</code> at every database, HTTP and FFI boundary removes the current catch-and-return-null class of silent data loss.</li>
+  <li>Genuine backpressure through bounded priority channels.</li>
+  <li>Zero data migration: same schema, same text timestamps.</li>
+  <li>Fast deployment and rollback: replace one executable, keep the .NET build as fallback.</li>
+</ul>
+
+<h2>6. Porting contract</h2>
+<ul class="check">
+  <li>SQL ports verbatim into rusqlite. Joins and limits stay in SQL.</li>
+  <li>Timestamps: <code>%Y-%m-%dT%H:%M:%S.%7fZ</code>. jiff's <code>%7f</code> truncates to exactly seven digits, matching .NET's 100 ns ticks. Never use jiff's default Display, which trims zeros. Unit tests pin known vectors including zero fractions.</li>
+  <li>JSON field order follows the C# declaration order, so outputs can be diffed textually.</li>
+  <li>Duration totals truncate, never round.</li>
+  <li>Null values are omitted; empty lists serialize as <code>[]</code>, as in .NET.</li>
+  <li>Exit codes: 0 on success, 1 on handled failure or missing database.</li>
+  <li>Configuration: keep the appsettings shape and tolerate unknown keys.</li>
+</ul>
+
+<h2>7. Workplan — twelve phases</h2>
+
+<div class="phases">
+
+<div class="sticky phase plain">
+  <h4>Phase 0 — Workspace foundation</h4>
+  <div class="est">0.5 day</div>
+  <ul class="check">
+    <li class="done">Workspace with core library and two binaries</li>
+    <li class="done">appsettings parsing with serde defaults</li>
+    <li class="done">Logging to console and rotating file</li>
+    <li class="done">Shared models and timestamp helper</li>
+  </ul>
+  <div class="gate"><b>Gate:</b> configuration and timestamp-format tests pass — <b>passed 2026-11-13</b> (5/5 tests)</div>
+</div>
+
+<div class="sticky phase plain">
+  <h4>Phase 1 — SQLite layer</h4>
+  <div class="est">1 day</div>
+  <ul class="check">
+    <li class="done">DDL and automatic column migration</li>
+    <li class="done">Save and query operations, compaction job</li>
+    <li class="done">CLI <code>stats</code> and <code>query</code></li>
+  </ul>
+  <div class="gate"><b>Gate:</b> opens a database produced by .NET; output matches on the same data — <b>passed 2026-11-13</b> (golden diff both directions; "Events Today" differs by design — tz fix)</div>
+</div>
+
+<div class="sticky phase plain">
+  <h4>Phase 2 — Read-only CLI</h4>
+  <div class="est">2 days</div>
+  <ul class="check">
+    <li class="done"><code>timeline</code>, <code>detailed</code>, <code>summary</code></li>
+    <li class="done">SQL verbatim; tables and color</li>
+  </ul>
+  <div class="gate"><b>Gate:</b> golden diff against .NET on a seed database — <b>passed 2026-11-14</b> (rows identical; borders/panel chrome differ cosmetically)</div>
+</div>
+
+<div class="sticky phase plain">
+  <h4>Phase 3 — Report v2.0</h4>
+  <div class="est">2 days</div>
+  <ul class="check">
+    <li class="done">Segment accumulation and clamping</li>
+    <li class="done">Per-application usage and insight indices</li>
+    <li class="done">Content-type breakdown</li>
+  </ul>
+  <div class="gate"><b>Gate:</b> canonical JSON diff vs .NET — <b>passed 2026-11-14</b> (identical excluding GeneratedAtUtc on 2-day, 1-day and empty ranges)</div>
+</div>
+
+<div class="sticky phase plain">
+  <h4>Phase 4 — Report 3.0-llm</h4>
+  <div class="est">3 days</div>
+  <ul class="check">
+    <li class="done">Project inference with regex patterns</li>
+    <li class="done">Hourly breakdown, top activities, moments</li>
+    <li class="done">Patterns, narrative, technology keywords</li>
+  </ul>
+  <div class="gate"><b>Gate:</b> canonical JSON diff vs .NET — <b>passed 2026-11-14</b> (identical excluding GeneratedAtUtc on 2-day, 1-day and empty ranges; C# "MMMM d, yyyy" / "h:mm tt" templates reproduced exactly)</div>
+</div>
+
+<div class="sticky phase plain">
+  <h4>Phase 5 — Sensors</h4>
+  <div class="est">1 day</div>
+  <ul class="check">
+    <li class="done">Foreground window, title, process identifier</li>
+    <li class="done">Idle time via <code>GetTickCount64</code></li>
+    <li class="done">Process name parity check</li>
+  </ul>
+  <div class="gate"><b>Gate:</b> live values match .NET on the same desktop — <b>passed 2026-11-14</b> (hwnd/pid/title/proc identical, last-input second identical)</div>
+</div>
+
+<div class="sticky phase plain">
+  <h4>Phase 6 — Capture</h4>
+  <div class="est">1 day</div>
+  <ul class="check">
+    <li class="done">BitBlt of the primary screen</li>
+    <li class="done">BGRA to RGB8 conversion</li>
+    <li class="done">JPEG quality 75 (4:2:0 via jpeg-encoder); frame math and lock semantics</li>
+  </ul>
+  <div class="gate"><b>Gate:</b> size within 20 percent and a visual check; encoders differ, so never compare bytes — <b>passed 2026-11-14</b> (1536x864 both, size delta 0.8–2.5 percent, mean-abs-diff 0.75–1.06)</div>
+</div>
+
+<div class="sticky phase plain">
+  <h4>Phase 7 — Ollama client</h4>
+  <div class="est">1 day</div>
+  <ul class="check">
+    <li class="done"><code>/api/chat</code> schema and payload (reqwest, exact C# body)</li>
+    <li class="done"><code>/api/tags</code> health check (substring match, ordinal ignore case)</li>
+    <li class="done">Base64 middle frame; timeout fix (infinite &rarr; effective_timeout)</li>
+    <li class="done">Malformed-response fallback path (C#-exact)</li>
+  </ul>
+  <div class="gate"><b>Gate:</b> live analysis succeeds; fallback tested — <b>passed 2026-11-16</b> (health true both clients, request bodies identical, live structured parse + fallback run; server = llama.cpp b12359 + Qwen3-VL-2B behind an Ollama-protocol shim)</div>
+</div>
+
+<div class="sticky phase plain">
+  <h4>Phase 8 — Queue and manager</h4>
+  <div class="est">1 day</div>
+  <ul class="check">
+    <li class="done">Bounded channel per priority level (CAS capacity fix)</li>
+    <li class="done">Metrics and graceful drain on stop</li>
+  </ul>
+  <div class="gate"><b>Gate:</b> drop-when-full and priority-order unit tests pass — <b>passed 2026-11-16</b> (40 tests green incl. end-to-end manager run)</div>
+</div>
+
+<div class="sticky phase plain">
+  <h4>Phase 9 — Service host</h4>
+  <div class="est">1.5 days</div>
+  <ul class="check">
+    <li class="done">Windows service integration and console fallback</li>
+    <li class="done">Sampling loop, triggers, idle rows</li>
+    <li>Throttle and periodic intervals stay hardcoded as in C# (3 min / 10 s)</li>
+  </ul>
+  <div class="gate"><b>Gate:</b> full loop with Ollama up and down; row shapes unchanged — <b>passed 2026-11-16</b> (inference row via shim; conn-refused fails fast; idle rows "O" timestamps; compaction ran at startup; 40 workspace tests green)</div>
+</div>
+
+<div class="sticky phase plain">
+  <h4>Phase 10 — Packaging and docs</h4>
+  <div class="est">0.5 day</div>
+  <ul class="check">
+    <li class="done">Release executables with static CRT (no vcruntime/ucrt imports)</li>
+    <li class="done">cleanup.bat (cargo), README and SETUP rewrite, RELEASE_NOTES.md (10 fixed defects)</li>
+    <li class="done">Deployed to <code>publish2/</code>; <code>publish/</code> untouched</li>
+  </ul>
+  <div class="gate"><b>Gate:</b> fresh-machine runbook works — <b>passed 2026-11-16</b> (clean-dir publish2 run: DB + Logs created, CLI stats OK; release golden diff vs .NET: MATCH standard + LLM)</div>
+</div>
+
+<div class="sticky phase plain">
+  <h4>Phase 11 — Soak and rollback drill</h4>
+  <div class="est">compressed to 1 h</div>
+  <ul class="check">
+    <li>.NET then Rust, ~20 min each, same DB, Ollama stand-in up</li>
+    <li>Compare event and insight counts; both CLIs diff-clean on the combined DB</li>
+    <li>Rollback = single startup-shortcut change (publish/ and publish2/ side by side)</li>
+  </ul>
+  <div class="gate"><b>Gate:</b> rollback is a single shortcut change; both builds read the same database — <b>passed 2026-11-16</b> (30 min combined soak on one DB: 335 events + 5 inferences, no corruption; CLI cross-check LLM MATCH, standard report equal modulo a documented topic tie-order; rollback = one shortcut edit between publish/ and publish2/)</div>
+</div>
+
+</div>
+
+<p class="total">Estimated total: <b>about 16 focused working days</b></p>
+
+<h2>8. Verification checklist</h2>
+<div class="sticky">
+  <ul class="check">
+    <li><b>Golden differential tests.</b> Generate a synthetic seed database; run the .NET CLI and the Rust CLI over it and compare canonical jq output for <code>report</code>, <code>report --llm</code>, <code>stats</code>, <code>query</code>, <code>timeline</code>, <code>detailed</code> and <code>summary</code>. Never use real screen data.</li>
+    <li><b>Unit tests</b> for duration formatting, truncation, key normalization, segment accumulation, insight matching, project regex, timestamp formatting and drop policy.</li>
+    <li><b>Database compatibility in both directions.</b> Rust reads a .NET-written database; .NET reads a Rust-written database; <code>.schema</code> output is identical.</li>
+    <li><b>Live service test.</b> Manual focus changes; Ollama down produces a logged error rather than silence; Ollama up produces an insight row; stop drains cleanly.</li>
+    <li><b>Capture sanity.</b> Capture the same screen with both stacks; compare decoded pixels and size band, never encoded bytes.</li>
+  </ul>
+</div>
+
+<h2>9. Deployment and rollback</h2>
+<div class="sticky">
+  <ul class="check">
+    <li>No database migration; the existing file is used as-is.</li>
+    <li>Path resolution unchanged for the service and the CLI.</li>
+    <li><code>publish2/</code> holds two executables, appsettings and the data directory; logs live under the executable directory.</li>
+    <li>Startup shortcut is re-pointed to the new service executable after sign-off.</li>
+    <li>Rollback re-points the shortcut to the .NET build; no data conversion is needed either way.</li>
+    <li>After the soak period: remove the .NET projects, rewrite the cleanup script, delete NuGet remnants and the isolated SDK.</li>
+  </ul>
+</div>
+
+<h2>10. Risks and watch-outs</h2>
+<div class="sticky">
+  <ul class="check">
+    <li><span class="tag t-ok">Closed</span><b>Toolchains.</b> Rust, MSVC build tools and an isolated .NET SDK are installed and verified.</li>
+    <li><span class="tag t-next">Open</span><b>Terminal fidelity.</b> Spectre.Console tables, panels and charts will not match exactly. JSON outputs are the contract; cosmetic drift is accepted.</li>
+    <li><span class="tag t-next">Open</span><b>Date formatting.</b> Narrative and date templates must be checked individually against C# output; the golden tests catch drift.</li>
+    <li><span class="tag t-next">Open</span><b>JPEG bytes differ.</b> Verify size band and visual quality only.</li>
+    <li><span class="tag t-next">Open</span><b>Service control parity.</b> Start, stop, service name and event-log behavior need a real <code>sc.exe</code>-style test.</li>
+    <li><span class="tag t-next">Open</span><b>Latency expectations.</b> Inference remains seconds-scale; Rust improves memory and CPU, not GPU time.</li>
+  </ul>
+</div>
+
+<h2>11. Explicit non-goals</h2>
+<ul class="check">
+  <li>Windows.Graphics.Capture and multi-monitor support (follow-up).</li>
+  <li>Database encryption (a stated wish in SETUP.md, deferred).</li>
+  <li>SQLite WAL mode.</li>
+  <li>Installer and auto-update.</li>
+  <li>Cross-platform support.</li>
+  <li>Tests inside the .NET codebase; they retire with the C# implementation.</li>
+</ul>
+
+<footer>Activity Monitor Rust migration plan, derived from a full audit of all four projects and the 2,413-line CLI. This document is kept in sync with the work: the live status section and affected sections are updated whenever a phase starts, a phase completes, a decision is made or a finding changes.</footer>
+
+</div>
+</body>
+</html>

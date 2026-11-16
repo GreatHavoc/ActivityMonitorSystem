@@ -1,0 +1,11 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/activity-monitor-core",
+    "crates/activity-monitor-service",
+    "crates/activity-monitor-cli",
+]
+
+[workspace.package]
+edition = "2024"
+license = "MIT"
