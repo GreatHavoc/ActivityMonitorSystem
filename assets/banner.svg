@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900">
+  <rect width="1600" height="900" fill="#0d1117"/>
+
+  <!-- app icon -->
+  <g transform="translate(150,180)">
+    <rect width="340" height="340" rx="76" fill="#161b22" stroke="#30363d" stroke-width="5"/>
+    <polyline points="38,206 104,206 132,118 168,288 196,180 218,206 302,206"
+              fill="none" stroke="#4ade80" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="272" cy="72" r="22" fill="#f59e0b"/>
+  </g>
+
+  <!-- day-timeline card -->
+  <g transform="translate(620,150)">
+    <rect width="830" height="420" rx="28" fill="#161b22" stroke="#30363d" stroke-width="4"/>
+    <!-- header row -->
+    <rect x="44" y="40" width="180" height="22" rx="11" fill="#30363d"/>
+    <rect x="640" y="40" width="146" height="22" rx="11" fill="#21262d"/>
+    <!-- timeline track -->
+    <line x1="44" y1="150" x2="786" y2="150" stroke="#30363d" stroke-width="4" stroke-linecap="round"/>
+    <!-- session bars -->
+    <rect x="60"  y="118" width="150" height="64" rx="16" fill="#4ade80"/>
+    <rect x="226" y="118" width="96"  height="64" rx="16" fill="#58a6ff"/>
+    <rect x="338" y="118" width="180" height="64" rx="16" fill="#4ade80"/>
+    <rect x="534" y="118" width="80"  height="64" rx="16" fill="#f59e0b"/>
+    <rect x="630" y="118" width="120" height="64" rx="16" fill="#8b949e"/>
+    <!-- time ticks -->
+    <g fill="#30363d">
+      <rect x="60"  y="210" width="4" height="14"/><rect x="226" y="210" width="4" height="14"/>
+      <rect x="392" y="210" width="4" height="14"/><rect x="558" y="210" width="4" height="14"/>
+      <rect x="710" y="210" width="4" height="14"/>
+    </g>
+    <!-- labels -->
+    <rect x="60"  y="244" width="70"  height="14" rx="7" fill="#21262d"/>
+    <rect x="226" y="244" width="70"  height="14" rx="7" fill="#21262d"/>
+    <rect x="338" y="244" width="90"  height="14" rx="7" fill="#21262d"/>
+    <rect x="534" y="244" width="60"  height="14" rx="7" fill="#21262d"/>
+    <rect x="630" y="244" width="80"  height="14" rx="7" fill="#21262d"/>
+    <!-- lower rows: list items -->
+    <g>
+      <rect x="44" y="310" width="26" height="26" rx="8" fill="#4ade80"/>
+      <rect x="84" y="316" width="300" height="14" rx="7" fill="#30363d"/>
+      <rect x="700" y="316" width="86" height="14" rx="7" fill="#21262d"/>
+    </g>
+    <g>
+      <rect x="44" y="356" width="26" height="26" rx="8" fill="#58a6ff"/>
+      <rect x="84" y="362" width="240" height="14" rx="7" fill="#30363d"/>
+      <rect x="700" y="362" width="86" height="14" rx="7" fill="#21262d"/>
+    </g>
+  </g>
+
+  <!-- wordmark -->
+  <text x="150" y="660" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="92" font-weight="700" fill="#f0f6fc" letter-spacing="6">ACTIVITY MONITOR</text>
+  <text x="152" y="736" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="34" fill="#8b949e">Your day, written down — 100% local, no cloud</text>
+</svg>

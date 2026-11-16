@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/banner.png" alt="Activity Monitor" width="720">
+</p>
+
 # Activity Monitor — Windows Application (Rust port)
 
 Lightweight Windows app that monitors user activity through window focus
