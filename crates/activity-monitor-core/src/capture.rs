@@ -8,7 +8,10 @@ use windows::Win32::Graphics::Gdi::{
     BitBlt, CreateCompatibleBitmap, CreateCompatibleDC, DeleteDC, DeleteObject, GetDC, GetDIBits,
     ReleaseDC, SelectObject, BITMAPINFO, BI_RGB, DIB_RGB_COLORS, HGDIOBJ, SRCCOPY,
 };
-use windows::Win32::UI::WindowsAndMessaging::{GetSystemMetrics, SM_CXSCREEN, SM_CYSCREEN};
+use windows::Win32::UI::WindowsAndMessaging::{
+    GetSystemMetrics, SM_CXSCREEN, SM_CXVIRTUALSCREEN, SM_CYSCREEN, SM_CYVIRTUALSCREEN, SM_XVIRTUALSCREEN,
+    SM_YVIRTUALSCREEN,
+};
 
 use crate::config::CaptureSettings;
 
@@ -47,7 +50,7 @@ pub async fn capture_frames(cfg: &CaptureSettings, cancel: &AtomicBool) -> Optio
         if cancel.load(Ordering::Relaxed) {
             break;
         }
-        match capture_screen() {
+        match capture_screen(cfg) {
             Some(data) => {
                 frames.push(data);
                 tracing::debug!(frame = i + 1, max_frames = max, "Captured frame");
@@ -76,9 +79,10 @@ async fn delay_or_cancel(interval: std::time::Duration, cancel: &AtomicBool) {
     }
 }
 
-/// Port of CaptureScreen: primary screen -> JPEG bytes, None on failure/no screen.
-pub fn capture_screen() -> Option<Vec<u8>> {
-    match try_capture_screen() {
+/// Port of CaptureScreen: primary screen (or the whole virtual screen when
+/// CaptureAllMonitors is set) -> JPEG bytes, None on failure/no screen.
+pub fn capture_screen(cfg: &CaptureSettings) -> Option<Vec<u8>> {
+    match try_capture_screen(cfg) {
         Ok(v) => v,
         Err(e) => {
             tracing::error!(error = %e, "Error capturing screen");
@@ -87,11 +91,21 @@ pub fn capture_screen() -> Option<Vec<u8>> {
     }
 }
 
-fn try_capture_screen() -> Result<Option<Vec<u8>>, Box<dyn std::error::Error>> {
+fn try_capture_screen(cfg: &CaptureSettings) -> Result<Option<Vec<u8>>, Box<dyn std::error::Error>> {
     unsafe {
-        // C# Screen.PrimaryScreen.Bounds — primary display, origin (0,0)
-        let w = GetSystemMetrics(SM_CXSCREEN);
-        let h = GetSystemMetrics(SM_CYSCREEN);
+        // C# Screen.PrimaryScreen.Bounds — primary display, origin (0,0).
+        // CaptureAllMonitors: the virtual screen bounds every monitor, so one
+        // BitBlt from the virtual origin grabs all screens in a single frame.
+        let (w, h, src_x, src_y) = if cfg.capture_all_monitors {
+            (
+                GetSystemMetrics(SM_CXVIRTUALSCREEN),
+                GetSystemMetrics(SM_CYVIRTUALSCREEN),
+                GetSystemMetrics(SM_XVIRTUALSCREEN),
+                GetSystemMetrics(SM_YVIRTUALSCREEN),
+            )
+        } else {
+            (GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN), 0, 0)
+        };
         if w <= 0 || h <= 0 {
             return Ok(None); // C# bounds == null -> null frame (skipped, not an error)
         }
@@ -100,7 +114,8 @@ fn try_capture_screen() -> Result<Option<Vec<u8>>, Box<dyn std::error::Error>> {
         let mem_dc = CreateCompatibleDC(Some(screen_dc));
         let bmp = CreateCompatibleBitmap(screen_dc, w, h);
         let old = SelectObject(mem_dc, HGDIOBJ(bmp.0));
-        BitBlt(mem_dc, 0, 0, w, h, Some(screen_dc), 0, 0, SRCCOPY).map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
+        BitBlt(mem_dc, 0, 0, w, h, Some(screen_dc), src_x, src_y, SRCCOPY)
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
 
         let mut bmi: BITMAPINFO = Default::default();
         bmi.bmiHeader.biSize = core::mem::size_of::<windows::Win32::Graphics::Gdi::BITMAPINFOHEADER>() as u32;
@@ -178,10 +193,20 @@ mod tests {
 
     #[tokio::test]
     async fn live_capture_produces_jpeg() {
-        let frame = capture_screen().expect("screen capture should succeed on a desktop session");
+        let frame = capture_screen(&CaptureSettings::default()).expect("screen capture should succeed on a desktop session");
         assert!(frame.len() > 1000, "jpeg too small: {}", frame.len());
         assert_eq!(&frame[0..2], &[0xFF, 0xD8], "SOI marker");
         assert_eq!(&frame[frame.len() - 2..], &[0xFF, 0xD9], "EOI marker");
+        let primary_img = image::load_from_memory(&frame).expect("decode");
+        let primary_dims = (primary_img.width(), primary_img.height());
+
+        // All-monitors frame covers the virtual screen: never smaller than primary
+        let all = CaptureSettings { capture_all_monitors: true, ..Default::default() };
+        let frame_all = capture_screen(&all).expect("virtual-screen capture should succeed");
+        let all_img = image::load_from_memory(&frame_all).expect("decode");
+        let all_dims = (all_img.width(), all_img.height());
+        assert!(all_dims.0 >= primary_dims.0 && all_dims.1 >= primary_dims.1,
+            "virtual screen {all_dims:?} smaller than primary {primary_dims:?}");
 
         let cfg = CaptureSettings {
             frame_rate: 5,

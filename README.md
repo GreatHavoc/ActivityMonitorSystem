@@ -67,7 +67,8 @@ Edit `publish2\appsettings.json` (loaded from the exe's folder):
       "FrameRate": 1, "MaxDurationSeconds": 30,
       "TriggerOnFocusChange": true, "TriggerOnIdleResume": true,
       "MaxFramesPerCapture": 1,
-      "PeriodicCaptureIntervalSeconds": 180, "MinEventCaptureIntervalSeconds": 10
+      "PeriodicCaptureIntervalSeconds": 180, "MinEventCaptureIntervalSeconds": 10,
+      "CaptureAllMonitors": true
     },
     "OllamaEndpoint": "http://localhost:11434",
     "OllamaModel": "qwen3-vl:2b",
@@ -88,7 +89,10 @@ the `publish2` folder (the CLI resolves `.\Data\ActivityData.db` first).
 `ProcessingTimeoutSeconds: 0` means the 120 s default (the C# code left the
 HTTP timeout infinite). `PeriodicCaptureIntervalSeconds` / `MinEventCaptureIntervalSeconds`
 were hardcoded to 3 min / 10 s in the C# service and are now configurable
-(defaults keep the old behavior). Logs go to `<exe_dir>\Logs\`.
+(defaults keep the old behavior). `CaptureAllMonitors: true` captures the
+whole virtual screen (all monitors) in one frame instead of just the primary
+display; the code default is `false`, matching the C# behavior. Logs go to
+`<exe_dir>\Logs\`.
 
 ## CLI usage
 

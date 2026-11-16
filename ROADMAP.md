@@ -96,6 +96,8 @@ the original .NET version.
 - Configurable capture intervals (`PeriodicCaptureIntervalSeconds` /
   `MinEventCaptureIntervalSeconds` in `appsettings.json`, defaults 180/10 =
   the old hardcoded values) and byte-exact report ordering (ICU sort)
+- Multi-monitor capture: `CaptureAllMonitors: true` grabs the whole virtual
+  screen (all displays) in one frame instead of just the primary
 
 ### Next — the following 1–3 months
 - **Every code change tested automatically.** CI (`.github/workflows/ci.yml`,
@@ -105,9 +107,10 @@ the original .NET version.
   manual gate until the runner image carries the dotnet SDK.
 - **Verified on a clean machine.** Real-Ollama end-to-end run plus a
   Windows-service install drill on a fresh VM.
-- **All your screens, not just the primary one.** Multi-monitor capture, plus
-  an optional Windows Graphics Capture mode behind a config flag (the capture
-  method the original docs promised).
+- **A capture method that matches the old README's promise.** Optional Windows
+  Graphics Capture mode behind a config flag (the original docs described WGC;
+  the C# code actually used GDI — see RELEASE_NOTES). Vetted backend:
+  `windows-capture` crate; BitBlt stays the default path.
 
 ### Later — when there is evidence it's worth it
 - **See your day, don't just query it.** A local read-only web page over the

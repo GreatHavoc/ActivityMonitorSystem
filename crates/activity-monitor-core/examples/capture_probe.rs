@@ -3,7 +3,8 @@
 
 fn main() {
     let out = std::env::args().nth(1).unwrap_or_else(|| "cap-rs.jpg".to_string());
-    let frame = activity_monitor_core::capture::capture_screen().expect("capture failed");
+    let cfg = activity_monitor_core::config::CaptureSettings::default();
+    let frame = activity_monitor_core::capture::capture_screen(&cfg).expect("capture failed");
     std::fs::write(&out, &frame).unwrap();
     // decode to report dimensions
     let img = image::load_from_memory(&frame).expect("decode");

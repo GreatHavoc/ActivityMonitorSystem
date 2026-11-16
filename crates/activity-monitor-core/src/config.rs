@@ -52,6 +52,10 @@ pub struct CaptureSettings {
     pub periodic_capture_interval_seconds: i64,
     #[serde(default = "d_min_event_capture_interval")]
     pub min_event_capture_interval_seconds: i64,
+    // C# captures only Screen.PrimaryScreen; default false preserves that.
+    // true captures the whole virtual screen (all monitors) in one frame.
+    #[serde(default = "d_false")]
+    pub capture_all_monitors: bool,
 }
 
 impl Default for CaptureSettings {
@@ -150,6 +154,7 @@ fn d_max_frames() -> i64 { 30 }
 fn d_periodic_capture_interval() -> i64 { 180 }
 fn d_min_event_capture_interval() -> i64 { 10 }
 fn d_true() -> bool { true }
+fn d_false() -> bool { false }
 fn d_ollama_endpoint() -> String { "http://localhost:11434".into() }
 fn d_ollama_model() -> String { "qwen3-vl:2b".into() }
 fn d_max_concurrent() -> i64 { 4 }
@@ -188,6 +193,8 @@ mod tests {
         // keys absent from the legacy file -> C# hardcoded values
         assert_eq!(s.capture_settings.periodic_capture_interval_seconds, 180);
         assert_eq!(s.capture_settings.min_event_capture_interval_seconds, 10);
+        // legacy file has no CaptureAllMonitors -> primary screen only (C# behavior)
+        assert!(!s.capture_settings.capture_all_monitors);
         // legacy typo key still lands on max_event_age_days
         assert_eq!(s.storage.max_event_age_days, 90);
         // 0 in the file is the old "infinite" sentinel -> effective timeout is 120 s
@@ -202,6 +209,7 @@ mod tests {
         assert_eq!(s.capture_settings.max_frames_per_capture, 30);
         assert_eq!(s.capture_settings.periodic_capture_interval_seconds, 180);
         assert_eq!(s.capture_settings.min_event_capture_interval_seconds, 10);
+        assert!(!s.capture_settings.capture_all_monitors);
         assert_eq!(s.ollama_endpoint, "http://localhost:11434");
         assert_eq!(s.ollama_model, "qwen3-vl:2b");
         assert_eq!(s.queue_settings.max_concurrent_tasks, 4);
