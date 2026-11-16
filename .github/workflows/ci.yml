@@ -40,5 +40,7 @@ jobs:
       - name: Smoke — CLI prints help
         shell: pwsh
         run: |
-          & ".\target\release\activity-monitor-cli.exe" --help | Select-Object -First 3
+          # Do not pipe into Select-Object -First: truncating the pipe kills
+          # the native exe early and pwsh then reports $LASTEXITCODE = 1.
+          & ".\target\release\activity-monitor-cli.exe" --help | Out-Null
           if ($LASTEXITCODE -ne 0) { exit 1 }
