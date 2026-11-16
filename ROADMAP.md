@@ -89,12 +89,19 @@ the original .NET version.
 - **You choose how often captures happen.** Move the periodic-capture and
   event-throttle intervals into `appsettings.json`; make report ordering
   match the old version byte-for-byte in all edge cases (ICU sort).
+- **All your screens, not just the primary one.** Multi-monitor capture, plus
+  an optional Windows Graphics Capture mode behind a config flag (the capture
+  method the original docs promised).
+- **Your agent can see your day.** An MCP (Model Context Protocol) server
+  shipped next to the service, exposing read-only tools over the same SQLite
+  database — today's timeline, per-session AI summaries, "what was I working
+  on around 2 pm?", and an ask-the-model tool for "summarize my day / what
+  should I do next". Any MCP-capable agent (Claude Desktop, VS Code, your own
+  scripts) connects with one config line and sees your actual work directly.
 
 ### Later — when there is evidence it's worth it
 - **See your day, don't just query it.** A local read-only web page over the
   database, replacing the CLI for browsing.
-- **All screens, and optional system-grade capture.** Multi-monitor capture;
-  Windows Graphics Capture behind a config flag.
 - **Keep the frames, keep as much history as you want.** Optional frame
   retention and a configurable retention age.
 - **Updates that find you.** Publish `publish2/` as GitHub Release assets
