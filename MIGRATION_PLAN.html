@@ -73,7 +73,7 @@
 
 <h1>Activity Monitor — Rust Migration Plan</h1>
 <div class="sub">Product audit, library selection and migration workplan</div>
-<div class="meta">Document maintained through the migration &nbsp;·&nbsp; last updated 2026-11-16 &nbsp;·&nbsp; all phases complete + day-zero bootstrap shipped + v1.0.0 released + post-release plan set</div>
+<div class="meta">Document maintained through the migration &nbsp;·&nbsp; last updated 2026-11-16 &nbsp;·&nbsp; all phases complete + day-zero bootstrap shipped + v1.0.0 released + MCP P0 plan detailed (spec 2026-07-28, dual-era)</div>
 
 <h2>1. Live status</h2>
 <div class="sticky">
@@ -397,6 +397,24 @@ crates/
   <li>Installer and auto-update.</li>
   <li>Cross-platform support.</li>
   <li>Tests inside the .NET codebase; they retire with the C# implementation.</li>
+</ul>
+
+<h2>12. Post-release P0 detail — MCP server (<code>activity-monitor-mcp</code>)</h2>
+<p>Standard: <b>MCP spec revision 2026-07-28 (latest)</b>, implemented <b>dual-era</b> so today's clients (which still speak the legacy 2025-11-25/2025-06-18 <code>initialize</code> handshake) also work. Transport: <b>stdio</b> only for v1 (newline-delimited JSON-RPC 2.0, one message per line, no embedded newlines; stdout carries protocol messages only, all logging to stderr).</p>
+<ul class="check">
+  <li><b>Protocol core (hand-rolled, no SDK dep):</b> JSON-RPC 2.0 loop over stdin/stdout. Modern era: every request carries <code>_meta["io.modelcontextprotocol/protocolVersion"]</code>; unknown version → error <code>-32022</code> with <code>supported: ["2026-07-28","2025-11-25","2025-06-18"]</code>; results carry <code>resultType: "complete"</code>; <code>server/discover</code> MUST be implemented (returns supportedVersions, capabilities, <code>_meta</code> serverInfo, instructions). Legacy era: answer <code>initialize</code> / <code>notifications/initialized</code> / <code>ping</code> and legacy-shaped <code>tools/list</code> / <code>tools/call</code>. Handle <code>notifications/cancelled</code> (abort in-flight tool call).</li>
+  <li><b>Tools (all read-only, <code>annotations.readOnlyHint: true</code>, deterministic order, JSON Schema 2020-12 input/output schemas, results return both a text block with serialized JSON and <code>structuredContent</code>):</b>
+    <ul>
+      <li><code>todays_timeline</code> (optional <code>date</code>) — events + AI labels for a day, same join as CLI <code>timeline</code>.</li>
+      <li><code>session_summary</code> (<code>date</code>, optional <code>app</code>) — per-app usage time + AI activity labels, like CLI <code>summary</code>.</li>
+      <li><code>activity_at</code> (<code>timestamp</code>, optional <code>windowMinutes</code>) — what was on screen around a moment.</li>
+      <li><code>daily_report</code> (<code>date</code>) — reuses the core report v2.0 JSON builder read-only.</li>
+      <li><code>ask_about_my_day</code> (<code>question</code>, optional <code>date</code>) — builds a compact day context from the DB and answers via the existing <code>OllamaClient</code> (text chat, no images); degrades to "Ollama unavailable" error result, never blocks monitoring.</li>
+    </ul>
+  </li>
+  <li><b>DB access:</b> open SQLite <b>read-only</b> (<code>mode=ro</code> URI) so the running service's writes are never blocked; path resolution same as the CLI (<code>./Data/ActivityData.db</code> then <code>%ProgramData%</code>), overridable via <code>--db</code> / <code>ACTIVITY_MONITOR_DB</code>. Config from the same <code>appsettings.json</code> next to the exe for the Ollama endpoint/model.</li>
+  <li><b>Deps:</b> only <code>activity-monitor-core</code> + serde/serde_json + tokio (all already in the workspace). Deferred (not in v1): resources, prompts, subscriptions/listen, Streamable HTTP transport, tasks extension, MRTR.</li>
+  <li><b>Gates:</b> unit tests driving the JSON-RPC loop in-process (server/discover, legacy initialize, tools/list, tools/call against a temp seeded DB, unknown-version error, cancelled notification); a live smoke against a real client config snippet (Claude Desktop / VS Code <code>mcpServers</code> JSON) documented in SETUP.md.</li>
 </ul>
 
 <footer>Activity Monitor Rust migration plan, derived from a full audit of all four projects and the 2,413-line CLI. This document is kept in sync with the work: the live status section and affected sections are updated whenever a phase starts, a phase completes, a decision is made or a finding changes.</footer>
