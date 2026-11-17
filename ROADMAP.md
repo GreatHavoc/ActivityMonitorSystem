@@ -71,23 +71,26 @@ the original .NET version.
 - Runs as a console app via the Startup folder, or as a Windows service
   (`--service` + `sc create`)
 
-## Known limits of this release
+## Known limits (v1.1.0)
 
-- Windows-service (`--service`) mode is built but not yet drill-tested under
-  `sc.exe` — use the Startup-shortcut mode for now
-- AI inference verified against a local stand-in; watch the first inference
-  row on a real machine once
-- Report topic/app lists now sort culture-aware (ICU collator at the Windows
-  user locale) exactly like the .NET `OrderBy` — the former tie-order
-  cosmetic difference is fixed (2026-11-17)
-- Capture intervals (3 min periodic / 10 s event throttle) are fixed, and
-  capture covers the primary screen only
+- Windows-service mode: `install-service.ps1` (elevated) ships with the
+  release; the actual `sc.exe create` run still needs one elevated test on a
+  real machine (this dev box has no admin token) — use the Startup-shortcut
+  mode until then
+- First inference on a cold model can exceed the 120 s default HTTP timeout;
+  set `ProcessingTimeoutSeconds: 600` on slow machines
+- Report topic/app lists sort culture-aware (ICU collator at the Windows
+  user locale) exactly like the .NET `OrderBy` (fixed 2026-11-17)
+- Capture intervals are configurable (defaults = old hardcoded 3 min / 10 s)
+  and multi-monitor capture is on via `CaptureAllMonitors: true`
 
 ---
 
 ## Now / Next / Later
 
-### Now — shipped in this release
+### Now — shipped (v1.0.0 on 2026-11-16, v1.1.0 on 2026-11-17)
+- v1.1.0 release page on GitHub with the `publish2/` zip (service + CLI +
+  MCP + `appsettings.json` + `install-service.ps1`) — see `RELEASE_NOTES.md`
 - Day-zero self-provisioning (database + AI engine + model)
 - Local timeline of app/window activity with AI session labels
 - CLI reports in .NET-compatible formats
@@ -127,11 +130,9 @@ the original .NET version.
 
 ---
 
-## Note on the GitHub release page
+## Note on the GitHub release pages
 
-The repo currently has no GitHub releases or tags, so there is no old C#
-artifact on any release page to remove. When creating the release: tag
-`rust-release`, attach only the `publish2/` folder (service + CLI +
-`appsettings.json`) — never the legacy .NET `publish/` — and use
-`RELEASE_NOTES.md` plus this roadmap as the release body. `main` stays the
-.NET original.
+Releases exist on `rust-release`: v1.0.0 and v1.1.0 (2026-11-17). Each page
+carries only the `publish2/` zip (service + CLI + MCP + `appsettings.json`
++ `install-service.ps1`) — never the legacy .NET `publish/`. Release body =
+`RELEASE_NOTES.md`. `main` stays the .NET original.
