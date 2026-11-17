@@ -130,6 +130,59 @@ the original .NET version.
 
 ---
 
+## v1.2 roadmap — market-informed (drafted 2026-11-17)
+
+Evidence base: MCP is the settled agent-to-tool standard (47k+ servers,
+~500M SDK downloads/month; we already implement spec 2026-07-28 and dual-era
+handshake — no spec work due yet); Hubstaff shipped a workforce-data MCP
+server (Sept 2026), so agent-readable activity data is a real product
+category; a May 2026 Northeastern/Columbia audit found 9/9 monitoring
+platforms share identifying worker data with third parties; California AB
+1331 (Sept 2026) and the EU AI Act tighten workplace surveillance toward
+consent + data minimization; Foundry Local GA + Windows ML GGUF support make
+NPU local inference a Windows path; research (Coco, MobileMem, MemArena,
+"Time and Space") converges on continuous desktop observation → local
+personalization → proactive agents, with SQLite + local embeddings as the
+substrate.
+
+### Now — in progress
+- **Privacy/consent posture as the product story** — README "Privacy &
+  consent" section shipped (local-only data, capture invisibility explained,
+  purge/retention controls documented)
+- **MCP as the product surface** — `search_activity` (keyword over past days,
+  with `from`/`to`/`limit`) shipped in v1.2-dev; semantic search (sqlite-vec)
+  and MCP Server Card (`.well-known`) metadata to follow
+- **Service install on real machines** — elevated `install-service.ps1` run
+  and a documented Scheduled-Task fallback for non-admin users
+
+### Next — the following 1–3 months
+- **DXGI Desktop Duplication capture backend (optional)** — GPU path, also
+  silent (no picker/border; only WGC shows those); dirty rectangles mean we
+  only re-infer when the screen changed. GDI stays the permanent fallback.
+  Known limits: one duplicating process per output (max 4 concurrent),
+  interfaces must be recreated on display/desktop changes.
+- **Semantic search in the same SQLite file** — sqlite-vec + FTS5 hybrid
+  retrieval with local embeddings; ship as a *degradable* derived index
+  (keyword search keeps working if the extension fails). Powers MCP
+  `search_activity` v2.
+- **Runtime flexibility** — swap the Ollama endpoint for Foundry Local /
+  Windows ML (OpenAI-compatible) so Copilot+ PCs get NPU inference.
+
+### Later — when there is evidence it's worth it
+- **From recording to advising** — weekly "shape of your work" digest: focus
+  blocks, context switching, share of AI-tool usage (the AI-governance
+  segment is the market's fastest-growing budget line). Read-only insights,
+  no intervention engine (research-grade personalization is the version after
+  that).
+- **Data ownership** — one-command full export, purge-by-age, per-app
+  exclusion rules.
+
+**Explicitly not doing** (market said no): WGC capture (stealth, settled),
+cloud sync/telemetry (the entire wedge), keystroke logging (legally
+radioactive).
+
+---
+
 ## Note on the GitHub release pages
 
 Releases exist on `rust-release`: v1.0.0 and v1.1.0 (2026-11-17). Each page

@@ -250,7 +250,14 @@ mod tests {
         }
     }
     fn uuid_lite() -> String {
-        format!("{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos())
+        // Windows clock resolution is ~15 ms, so nanos alone collide when
+        // tests run in parallel; add a process-local counter.
+        static N: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+        let n = N.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        format!(
+            "{}-{n}",
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
+        )
     }
 
     fn rpc() -> (Rpc, TempGuard) {
@@ -309,7 +316,7 @@ mod tests {
         let (r, _g) = rpc();
         let list = r.handle(req(1, "tools/list", json!({}))).await.unwrap();
         let tools = list["result"]["tools"].as_array().unwrap();
-        assert_eq!(tools.len(), 5);
+        assert_eq!(tools.len(), 6);
         assert!(tools.iter().all(|t| t["inputSchema"]["type"] == "object" && t["annotations"]["readOnlyHint"] == true));
         let today = timefmt::today_local_date().to_string();
         let call = r
@@ -322,6 +329,39 @@ mod tests {
         assert_eq!(events[0]["processName"], "code.exe");
         // text block mirrors the structured content
         assert!(call["result"]["content"][0]["text"].as_str().unwrap().contains("code.exe"));
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn search_activity_hits_and_misses() {
+        let (r, _g) = rpc();
+        let hit = r
+            .handle(req(
+                1,
+                "tools/call",
+                json!({"name": "search_activity", "arguments": {"query": "main.rs"}}),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(hit["result"]["isError"], false);
+        let sc = &hit["result"]["structuredContent"];
+        assert_eq!(sc["count"], 1);
+        assert_eq!(sc["matches"][0]["activityLabel"], "Coding in VS Code");
+        let miss = r
+            .handle(req(
+                2,
+                "tools/call",
+                json!({"name": "search_activity", "arguments": {"query": "nosuchkeyword"}}),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(miss["result"]["isError"], false);
+        assert_eq!(miss["result"]["structuredContent"]["count"], 0);
+        // missing query -> tool error result (not a protocol error)
+        let bad = r
+            .handle(req(3, "tools/call", json!({"name": "search_activity", "arguments": {}})))
+            .await
+            .unwrap();
+        assert_eq!(bad["result"]["isError"], true);
     }
 
     #[tokio::test(flavor = "current_thread")]

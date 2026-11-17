@@ -17,12 +17,14 @@ build deploys to `publish2/`.
 ## Features
 
 - **Activity Tracking**: foreground window + idle detection via Win32 APIs
-- **Smart Screen Capture**: GDI `BitBlt` of the primary screen, JPEG q75,
+- **Smart Screen Capture**: GDI `BitBlt` of the virtual screen, JPEG q75,
   low-FPS burst on triggers
 - **AI Analysis**: Qwen3-VL via Ollama `/api/chat` with structured output
 - **Queue System**: priority-based processing with backpressure
 - **Event Storage**: SQLite timeline (`ActivityEvents` + `InferenceResults`)
 - **CLI Tools**: timeline, detailed, summary, stats, report (JSON / LLM)
+- **MCP Server**: read-only agent access to your activity day (Model Context
+  Protocol, spec 2026-07-28)
 
 ## Requirements
 
@@ -44,6 +46,48 @@ powershell -File deploy.ps1       REM copies exes + appsettings.json to publish2
 ```
 
 Or just use the prebuilt `publish2\` folder.
+
+## MCP server (agent access to your day)
+
+`activity-monitor-mcp.exe` exposes the recorded timeline to MCP clients
+(Claude, Cursor, Copilot, …) over the same SQLite file. Stdio by default;
+Streamable HTTP on 127.0.0.1 with `--http <port>`; `--db <path>` or
+`ACTIVITY_MONITOR_DB` picks the database (default: the same
+`./Data/ActivityData.db` resolution as the CLI). The database is opened
+`SQLITE_OPEN_READONLY`, so the server never blocks or writes to the service.
+
+| Tool | What it answers |
+|---|---|
+| `todays_timeline` | every recorded event for a day, with AI labels |
+| `session_summary` | time per app, category distribution, labels seen |
+| `activity_at` | what was on screen in a window around a timestamp |
+| `daily_report` | structured JSON report for a day |
+| `search_activity` | keyword search over past days' app/topic/summary/visible-text (newest first, `from`/`to`/`limit`) |
+| `ask_about_my_day` | free-form question answered by the local Ollama model, grounded only in your data |
+
+Example (stdio, one request per line):
+
+```json
+{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"search_activity","arguments":{"query":"tableau","from":"2026-11-10","to":"2026-11-17","limit":5}}}
+```
+
+Point your client at it, e.g. Claude Code: `claude mcp add activity-monitor -- path\to\activity-monitor-mcp.exe`.
+
+## Privacy & consent
+
+- **Everything is local.** Captured frames, the database, and the AI model all
+  stay on this machine. There is no cloud endpoint, no telemetry, and no
+  account — nothing in this app can send your screen anywhere.
+- **Capture is invisible to you while running** (no consent picker, no capture
+  border, no notification) by design — GDI `BitBlt`, never Windows Graphics
+  Capture. That makes this a *single-user self-monitoring* tool. Using it to
+  monitor employees or other people is not what it is for, and workplace
+  surveillance laws (EU AI Act, California AB 1331, 2026) require informed
+  consent, no covert recording, and data minimization.
+- **You control the data.** `Data\ActivityData.db` is a plain SQLite file:
+  delete it to purge everything, or back it up to keep it. Old events are
+  auto-compacted after `MaxEventAgeDays` (default 90). Frames are not retained
+  unless `RetainFrames: true`.
 
 ## Auto-start
 

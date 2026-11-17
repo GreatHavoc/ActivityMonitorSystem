@@ -54,6 +54,62 @@ pub struct EventRow {
     pub is_idle: bool,
 }
 
+/// One keyword-search hit over the AI-written fields of `InferenceResults`
+/// (v1.2 `search_activity`; keyword-only until the sqlite-vec index lands).
+pub struct SearchHitRow {
+    pub processed_at: String,
+    pub activity_label: String,
+    pub application: Option<String>,
+    pub topic: Option<String>,
+    pub summary: String,
+    pub visible_text: Option<String>,
+}
+
+/// Keyword search over `InferenceResults` in a time window, newest first.
+/// Case-insensitive LIKE with the caller escaping `%`, `_` and `\`.
+pub fn search_inference_results(
+    conn: &Connection,
+    pattern: &str,
+    from_o: &str,
+    to_o: &str,
+    limit: i64,
+) -> rusqlite::Result<Vec<SearchHitRow>> {
+    let mut stmt = conn.prepare(
+        "SELECT ProcessedAt, ActivityLabel, Application, Topic, Summary, VisibleText
+         FROM InferenceResults
+         WHERE ProcessedAt >= ?1 AND ProcessedAt < ?2
+           AND (COALESCE(Application,'') || ' ' || COALESCE(Topic,'') || ' '
+                || Summary || ' ' || COALESCE(VisibleText,'')) LIKE ?3 ESCAPE '\\'
+         ORDER BY ProcessedAt DESC LIMIT ?4",
+    )?;
+    let rows = stmt
+        .query_map(params![from_o, to_o, pattern, limit], |r| {
+            Ok(SearchHitRow {
+                processed_at: r.get(0)?,
+                activity_label: r.get(1)?,
+                application: r.get(2)?,
+                topic: r.get(3)?,
+                summary: r.get(4)?,
+                visible_text: r.get(5)?,
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(rows)
+}
+
+/// Escapes LIKE wildcards in a user query so `search_inference_results`
+/// matches literal text only.
+pub fn escape_like(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for c in s.chars() {
+        if c == '%' || c == '_' || c == '\\' {
+            out.push('\\');
+        }
+        out.push(c);
+    }
+    out
+}
+
 pub struct ActivityDatabase {
     conn: Connection,
 }
@@ -620,6 +676,73 @@ mod tests {
         let det = det.unwrap();
         assert!(det.contains("\"Label\":\"editor\""), "got: {det}");
         assert!(det.contains("\"BoundingBox\":{\"X\":1"));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn search_inference_results_matches_keywords_and_escapes_wildcards() {
+        let (dir, db) = temp_db("search");
+        let mk = |ts: &str, label: &str, app: &str, topic: &str| InferenceResult {
+            request_id: uuid::Uuid::new_v4(),
+            processed_at: parse_o(ts).unwrap(),
+            activity_label: label.into(),
+            application: app.into(),
+            content_type: "image".into(),
+            topic: topic.into(),
+            action: "writing".into(),
+            summary: format!("Working on {topic}"),
+            visible_text: format!("window {topic}"),
+            detected_objects: None,
+            confidence: 0.9,
+            raw_response: None,
+        };
+        db.save_inference_result(&mk(
+            "2026-11-13T08:06:00.0000000Z",
+            "coding",
+            "code",
+            "rust project",
+        ))
+        .unwrap();
+        db.save_inference_result(&mk(
+            "2026-11-13T09:06:00.0000000Z",
+            "writing",
+            "obsidian",
+            "notes",
+        ))
+        .unwrap();
+
+        let hits = search_inference_results(
+            &db.conn,
+            &format!("%{}%", escape_like("rust")),
+            "2026-11-13T00:00:00.0000000Z",
+            "2026-11-14T00:00:00.0000000Z",
+            10,
+        )
+        .unwrap();
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].topic.as_deref(), Some("rust project"));
+
+        // a bare `%` in the query must be literal, not a wildcard
+        let wildcard = search_inference_results(
+            &db.conn,
+            &format!("%{}%", escape_like("%")),
+            "2026-11-13T00:00:00.0000000Z",
+            "2026-11-14T00:00:00.0000000Z",
+            10,
+        )
+        .unwrap();
+        assert!(wildcard.is_empty());
+
+        // out-of-window query misses
+        let outside = search_inference_results(
+            &db.conn,
+            "%notes%",
+            "2026-11-14T00:00:00.0000000Z",
+            "2026-11-15T00:00:00.0000000Z",
+            10,
+        )
+        .unwrap();
+        assert!(outside.is_empty());
         std::fs::remove_dir_all(&dir).ok();
     }
 }

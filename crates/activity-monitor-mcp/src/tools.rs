@@ -29,6 +29,29 @@ fn date_bounds(date: Option<&str>) -> Result<(String, String, String), String> {
     Ok((date, from, to))
 }
 
+/// Inclusive local-date range [from, to] as UTC "O" bounds; both default today.
+fn range_bounds(from: Option<&str>, to: Option<&str>) -> Result<(String, String), String> {
+    let today = timefmt::today_local_date().to_string();
+    let parse = |d: &str| -> Result<String, String> {
+        timefmt::parse_local_date(d).map_err(|e| format!("Invalid date '{d}': {e}"))?;
+        Ok(d.to_string())
+    };
+    let from_d = match from {
+        Some(d) if !d.is_empty() => parse(d)?,
+        _ => today.clone(),
+    };
+    let to_d = match to {
+        Some(d) if !d.is_empty() => parse(d)?,
+        _ => today,
+    };
+    if from_d > to_d {
+        return Err(format!("'from' ({from_d}) must be <= 'to' ({to_d})"));
+    }
+    let from_o = timefmt::local_date_to_utc_o(&from_d).map_err(|e| e.to_string())?;
+    let to_o = timefmt::next_day_local_midnight_utc_o(&to_d).map_err(|e| e.to_string())?;
+    Ok((from_o, to_o))
+}
+
 fn need_db(state: &ToolState) -> Result<MutexGuard<'_, Option<ActivityDatabase>>, String> {
     let guard = state.db.lock().map_err(|e| e.to_string())?;
     if guard.is_none() {
@@ -84,6 +107,22 @@ pub fn tool_defs() -> Value {
             "annotations": read_only
         },
         {
+            "name": "search_activity",
+            "title": "Search recorded activity by keyword",
+            "description": "Case-insensitive keyword search over the AI-written fields of past activity days (app, topic, summary, visible text), newest first. Keyword-only today; semantic search lands with the vector index.",
+            "inputSchema": obj({
+                let p = json!({
+                    "query": { "type": "string", "description": "Keywords to search for, e.g. 'tableau' or 'standup'" },
+                    "from": { "type": "string", "description": "Start local date YYYY-MM-DD (default: today)" },
+                    "to": { "type": "string", "description": "End local date YYYY-MM-DD (default: today)" },
+                    "limit": { "type": "number", "description": "Max hits (default 20, max 200)", "default": 20 }
+                }).as_object().unwrap().clone();
+                Value::Object(p)
+            }, vec!["query"]),
+            "outputSchema": obj(json!({ "query": {"type":"string"}, "count": {"type":"number"}, "matches": {"type":"array"} }), vec!["query", "count", "matches"]),
+            "annotations": read_only
+        },
+        {
             "name": "ask_about_my_day",
             "title": "Ask the local AI about your day",
             "description": "Answers a question about your recorded day using the local Ollama model, grounded only in your own activity data.",
@@ -104,6 +143,7 @@ pub async fn call(state: &Arc<ToolState>, name: &str, args: &Value, cancel: &Ato
         "session_summary" => session_summary(state, args),
         "activity_at" => activity_at(state, args),
         "daily_report" => daily_report(state, args),
+        "search_activity" => search_activity(state, args),
         "ask_about_my_day" => ask_about_my_day(state, args, cancel).await,
         _ => Err(format!("Unknown tool: {name}")),
     }
@@ -239,6 +279,53 @@ fn daily_report(state: &ToolState, args: &Value) -> Result<Value, String> {
             "timestamp": r.timestamp, "eventType": r.event_type,
             "processName": r.process_name, "windowTitle": r.window_title, "isIdle": r.is_idle
         })).collect::<Vec<_>>()
+    }))
+}
+
+fn search_activity(state: &ToolState, args: &Value) -> Result<Value, String> {
+    let guard = need_db(state)?;
+    let db = guard.as_ref().unwrap();
+    let query = args
+        .get("query")
+        .and_then(|q| q.as_str())
+        .map(str::trim)
+        .filter(|q| !q.is_empty())
+        .ok_or("Missing required argument: query")?;
+    let (from_o, to_o) = range_bounds(
+        args.get("from").and_then(|d| d.as_str()),
+        args.get("to").and_then(|d| d.as_str()),
+    )?;
+    let limit = args
+        .get("limit")
+        .and_then(|l| l.as_i64())
+        .unwrap_or(20)
+        .clamp(1, 200);
+    let pattern = format!("%{}%", activity_monitor_core::db::escape_like(query));
+    let hits = activity_monitor_core::db::search_inference_results(
+        db.conn(),
+        &pattern,
+        &from_o,
+        &to_o,
+        limit,
+    )
+    .map_err(|e| e.to_string())?;
+    let matches: Vec<Value> = hits
+        .iter()
+        .map(|h| {
+            json!({
+                "timestamp": h.processed_at,
+                "activityLabel": h.activity_label,
+                "application": h.application,
+                "topic": h.topic,
+                "summary": h.summary,
+                "visibleText": h.visible_text,
+            })
+        })
+        .collect();
+    Ok(json!({
+        "query": query,
+        "count": matches.len(),
+        "matches": matches,
     }))
 }
 
