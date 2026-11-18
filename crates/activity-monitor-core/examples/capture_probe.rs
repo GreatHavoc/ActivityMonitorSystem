@@ -1,5 +1,7 @@
 //! Phase 6 gate probe: capture one frame, write it to disk, print size.
 //! Run: cargo run -p activity-monitor-core --example capture_probe -- <out.jpg>
+//! Windows only (screen capture); compiles to an empty main elsewhere.
+#![cfg(windows)]
 
 fn main() {
     let out = std::env::args().nth(1).unwrap_or_else(|| "cap-rs.jpg".to_string());
