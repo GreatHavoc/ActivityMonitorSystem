@@ -67,6 +67,26 @@ pub struct CaptureSettings {
     /// DXGI failure falls back to GDI for that capture.
     #[serde(default = "d_backend")]
     pub capture_backend: String,
+    /// v1.3: process names (with or without ".exe", case-insensitive) that are
+    /// never recorded: no focus event, no capture while they are foreground.
+    /// Empty by default, which keeps the C# behavior exactly.
+    #[serde(default)]
+    pub excluded_processes: Vec<String>,
+}
+
+impl CaptureSettings {
+    pub fn is_excluded(&self, process_name: &str) -> bool {
+        if self.excluded_processes.is_empty() {
+            return false;
+        }
+        let p = process_name.trim().to_lowercase();
+        let stem = p.strip_suffix(".exe").unwrap_or(&p);
+        self.excluded_processes.iter().any(|e| {
+            let e = e.trim().to_lowercase();
+            let e_stem = e.strip_suffix(".exe").unwrap_or(&e);
+            e_stem == stem || e_stem == p
+        })
+    }
 }
 
 impl Default for CaptureSettings {
@@ -234,5 +254,18 @@ mod tests {
         assert_eq!(s.queue_settings.max_concurrent_tasks, 4);
         assert_eq!(s.storage.database_path, "ActivityData.db");
         assert_eq!(s.storage.max_event_age_days, 90);
+    }
+
+    #[test]
+    fn excluded_processes_matching() {
+        let mut s = CaptureSettings::default();
+        assert!(!s.is_excluded("Code"));
+        s.excluded_processes = vec!["Code".into(), "OneNote.exe".into()];
+        assert!(s.is_excluded("Code"));
+        assert!(s.is_excluded("code.exe"));
+        assert!(s.is_excluded("ONENOTE"));
+        assert!(!s.is_excluded("CodeHelper"));
+        // substring must not match
+        assert!(!s.is_excluded("MyCode"));
     }
 }

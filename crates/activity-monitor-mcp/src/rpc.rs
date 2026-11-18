@@ -316,7 +316,7 @@ mod tests {
         let (r, _g) = rpc();
         let list = r.handle(req(1, "tools/list", json!({}))).await.unwrap();
         let tools = list["result"]["tools"].as_array().unwrap();
-        assert_eq!(tools.len(), 6);
+        assert_eq!(tools.len(), 7);
         assert!(tools.iter().all(|t| t["inputSchema"]["type"] == "object" && t["annotations"]["readOnlyHint"] == true));
         let today = timefmt::today_local_date().to_string();
         let call = r

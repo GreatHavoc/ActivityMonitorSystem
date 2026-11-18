@@ -72,7 +72,8 @@ Streamable HTTP on 127.0.0.1 with `--http <port>`; `--db <path>` or
 | `activity_at` | what was on screen in a window around a timestamp |
 | `daily_report` | structured JSON report for a day |
 | `search_activity` | hybrid search over past days: FTS5-ranked lexical + trigram fuzzy (typos/shared vocabulary), RRF-merged, `from`/`to`/`limit` |
-| `ask_about_my_day` | free-form question answered by the local Ollama model, grounded only in your data |
+| `ask_about_my_day` | free-form question answered by the local model, grounded only in your data |
+| `weekly_digest` | 7-day "shape of your work" digest as Markdown: events, context switches, top apps, category mix, topics, busiest hours |
 
 Example (stdio, one request per line):
 
@@ -81,6 +82,12 @@ Example (stdio, one request per line):
 ```
 
 Point your client at it, e.g. Claude Code: `claude mcp add activity-monitor -- path\to\activity-monitor-mcp.exe`.
+
+Provenance for agents: the repo ships `server.json` (MCP server card) and
+every release carries a `SHA256SUMS.txt` asset plus a GitHub attestation, so
+a client can verify the binary before connecting. All tools are read-only
+(`readOnlyHint: true`); the server opens the database read-only and binds
+HTTP to 127.0.0.1 only.
 
 ## Privacy & consent
 
@@ -95,8 +102,23 @@ Point your client at it, e.g. Claude Code: `claude mcp add activity-monitor -- p
   consent, no covert recording, and data minimization.
 - **You control the data.** `Data\ActivityData.db` is a plain SQLite file:
   delete it to purge everything, or back it up to keep it. Old events are
-  auto-compacted after `MaxEventAgeDays` (default 90). Frames are not retained
-  unless `RetainFrames: true`.
+  auto-compacted after `MaxEventAgeDays` (default 90), and AI summaries are
+  purged together with their events. Frames are not retained unless
+  `RetainFrames: true`.
+- **Export and exclude (v1.3).** `activity-monitor-cli.exe export --from ... --to ... --format md|json`
+  writes your whole history (events plus AI summaries) to a file you own,
+  which also covers GDPR-style portability and erasure requests (export,
+  then delete the DB). `ExcludedProcesses` in `appsettings.json` lists apps
+  that are never recorded: no focus event and no capture while they are in
+  the foreground (match by process name, with or without `.exe`, case
+  insensitive).
+- **Workplace use.** This is a self-monitoring tool. If it is ever pointed at
+  another person, workplace surveillance rules apply (EU AI Act high-risk
+  duties for worker-management systems have been enforceable since
+  2026-08-02; California AB 1331; GDPR). Those regimes require informed
+  consent, no covert recording and data minimization, which this tool's
+  design (local-only, no covert cloud sync, purge and export controls)
+  supports, but consent itself is the deployer's responsibility.
 
 ## Auto-start
 
@@ -122,7 +144,8 @@ Edit `publish2\appsettings.json` (loaded from the exe's folder):
       "TriggerOnFocusChange": true, "TriggerOnIdleResume": true,
       "MaxFramesPerCapture": 1,
       "PeriodicCaptureIntervalSeconds": 180, "MinEventCaptureIntervalSeconds": 10,
-      "CaptureAllMonitors": true, "CaptureBackend": "gdi"
+      "CaptureAllMonitors": true, "CaptureBackend": "gdi",
+      "ExcludedProcesses": []
     },
     "OllamaEndpoint": "http://localhost:11434",
     "OllamaModel": "qwen3-vl:2b",
@@ -151,7 +174,9 @@ display; the code default is `false`, matching the C# behavior. `CaptureBackend`
 selects the capture path: `"gdi"` (default, the C# behavior) or `"dxgi"`
 (Desktop Duplication — also silent, GPU-copied; any failure, including a
 uniform/blank frame from an unsupported adapter, falls back to GDI for that
-capture). Logs go to `<exe_dir>\Logs\`.
+capture). `ExcludedProcesses` lists process names that are never recorded
+(for example `["OneNote", "game.exe"]`); an empty list records everything.
+Logs go to `<exe_dir>\Logs\`.
 
 ## CLI usage
 
@@ -163,6 +188,8 @@ activity-monitor-cli.exe summary --date "2026-11-15"
 activity-monitor-cli.exe stats
 activity-monitor-cli.exe report --from "2026-11-15" --to "2026-11-16" --output report.json
 activity-monitor-cli.exe report --from "2026-11-15" --to "2026-11-16" --llm
+activity-monitor-cli.exe report --week --output digest.md
+activity-monitor-cli.exe export --from "2026-11-01" --to "2026-11-18" --format md --output my-history.md
 activity-monitor-cli.exe query --from "2026-11-15" --to "2026-11-16" --limit 100
 ```
 

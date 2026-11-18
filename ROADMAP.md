@@ -194,7 +194,7 @@ radioactive).
 
 ---
 
-## v1.3 roadmap — market scan + usage audit (drafted 2026-11-18)
+## v1.3 roadmap — market scan + usage audit (drafted 2026-11-18, **released as v1.3.0 on 2026-11-18**)
 
 Evidence base: the MCP registry passed 47,000 servers on 2026-10-21 (about 40x
 the end of 2025) with 97M+ monthly SDK downloads, but 2026 security reports
@@ -212,7 +212,7 @@ summaries, and databases from older versions have no FTS table, so the
 LIKE+fuzzy fallback is the path most real installs take until the service
 re-indexes. Full notes: brain inbox note `market-research-activity-monitor-v13`.
 
-### Now — next release (v1.3)
+### Now — shipped in v1.3.0
 - Data ownership bundle: `cli export` to Markdown and JSON with a date range,
   purge of inference rows when their events age out, and an `ExcludedProcesses`
   list in `appsettings.json`. Grounds: GDPR portability/erasure, AI Act data
@@ -221,10 +221,12 @@ re-indexes. Full notes: brain inbox note `market-research-activity-monitor-v13`.
 - Weekly "shape of your work" digest: a `weekly_digest` MCP tool plus
   `cli report --week`, written as a Markdown file. Promoted from Later because
   the data already exists and it is the most visible proof of value.
-- Trust and distribution: SHA256SUMS on every release, `gh` release
-  attestations, an MCP server card (`server.json`) with provenance, registry
-  submission, and a short "for agents" README section. Grounds: 47k servers
-  and a live supply-chain crisis; agents verify a server before connecting.
+- Trust and distribution: `server.json` (MCP server card) shipped in the repo,
+  SHA256SUMS on every release, and a provenance note in the README's MCP
+  section. Remaining follow-ups: GitHub attestations (the local `gh` CLI has
+  no `attest` command yet) and registry submission (needs an OCI package
+  push). Grounds: 47k servers and a live supply-chain crisis; agents verify a
+  server before connecting.
 - Compliance note in the README: personal-use scope, what changes if the tool
   is used at work (AI Act Annex III, consent), and how export/delete map to
   GDPR rights.

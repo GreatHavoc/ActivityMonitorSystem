@@ -161,60 +161,70 @@ async fn iteration(
     next_compaction: &mut Instant,
     compact_interval: Duration,
 ) -> Result<(), String> {
+    // Idle state + focus, read once per iteration. v1.3: ExcludedProcesses
+    // gate both the event write and any capture while the foreground app is
+    // excluded (empty list = C# behavior exactly).
+    let idle = sensors::idle_state(settings.idle_threshold_seconds);
+    let is_idle = idle.is_idle;
+    let focus = if is_idle { None } else { sensors::current_focus() };
+    let focus_excluded = focus
+        .as_ref()
+        .map(|f| settings.capture_settings.is_excluded(&f.process_name))
+        .unwrap_or(false);
+
     // Periodic capture for continuous monitoring (C# hardcoded 3 min; now
     // configurable via CaptureSettings.PeriodicCaptureIntervalSeconds)
     let periodic_interval =
         Duration::from_secs(settings.capture_settings.periodic_capture_interval_seconds.max(0) as u64);
     let min_event_interval =
         Duration::from_secs(settings.capture_settings.min_event_capture_interval_seconds.max(0) as u64);
-    if last_periodic.map_or(true, |t| t.elapsed() >= periodic_interval) {
+    if !focus_excluded && last_periodic.map_or(true, |t| t.elapsed() >= periodic_interval) {
         tracing::info!("Triggering periodic capture for continuous monitoring");
         trigger_capture(queue, "periodic_monitoring", RequestPriority::Normal, last_capture, min_event_interval);
         *last_periodic = Some(Instant::now());
     }
 
-    // Idle state + idle-resume trigger
-    let idle = sensors::idle_state(settings.idle_threshold_seconds);
-    let is_idle = idle.is_idle;
+    // Idle-resume trigger
     if *was_idle && !is_idle {
         tracing::info!("User resumed from idle");
-        if settings.capture_settings.trigger_on_idle_resume {
+        if settings.capture_settings.trigger_on_idle_resume && !focus_excluded {
             trigger_capture(queue, "idle_resume", RequestPriority::High, last_capture, min_event_interval);
         }
     }
     *was_idle = is_idle;
 
-    if !is_idle {
-        if let Some(focus) = sensors::current_focus() {
-            let window_key = format!("{}:{}", focus.process_id, focus.window_title);
-            if last_focused.as_deref() != Some(window_key.as_str()) {
-                tracing::info!(
-                    process = %focus.process_name,
-                    title = %focus.window_title,
-                    "Focus changed to process-title"
-                );
-                let event = ActivityEvent {
-                    id: 0,
-                    timestamp: Timestamp::now(),
-                    event_type: "focus_change".into(),
-                    process_id: Some(focus.process_id),
-                    process_name: Some(focus.process_name),
-                    window_title: Some(focus.window_title),
-                    is_idle: false,
-                    idle_duration_seconds: None,
-                    metadata: None,
-                };
-                db.lock()
-                    .unwrap()
-                    .save_activity_event(&event)
-                    .map_err(|e| e.to_string())?;
-                if settings.capture_settings.trigger_on_focus_change {
-                    trigger_capture(queue, "focus_change", RequestPriority::High, last_capture, min_event_interval);
-                }
-                *last_focused = Some(window_key);
+    if let Some(focus) = focus {
+        let window_key = format!("{}:{}", focus.process_id, focus.window_title);
+        if focus_excluded {
+            // Still track the focus key so re-entering a normal app records an event.
+            *last_focused = Some(window_key);
+        } else if last_focused.as_deref() != Some(window_key.as_str()) {
+            tracing::info!(
+                process = %focus.process_name,
+                title = %focus.window_title,
+                "Focus changed to process-title"
+            );
+            let event = ActivityEvent {
+                id: 0,
+                timestamp: Timestamp::now(),
+                event_type: "focus_change".into(),
+                process_id: Some(focus.process_id),
+                process_name: Some(focus.process_name),
+                window_title: Some(focus.window_title),
+                is_idle: false,
+                idle_duration_seconds: None,
+                metadata: None,
+            };
+            db.lock()
+                .unwrap()
+                .save_activity_event(&event)
+                .map_err(|e| e.to_string())?;
+            if settings.capture_settings.trigger_on_focus_change {
+                trigger_capture(queue, "focus_change", RequestPriority::High, last_capture, min_event_interval);
             }
+            *last_focused = Some(window_key);
         }
-    } else {
+    } else if is_idle {
         let event = ActivityEvent {
             id: 0,
             timestamp: Timestamp::now(),

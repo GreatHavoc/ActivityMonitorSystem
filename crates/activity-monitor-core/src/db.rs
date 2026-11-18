@@ -479,16 +479,69 @@ impl ActivityDatabase {
 
     /// Deletes events older than `max_age_days`, then VACUUMs (verbatim from
     /// CompactOldEventsAsync). The C# method was never called; the Rust service
-    /// wires it into the daily loop (Phase 9).
+    /// wires it into the daily loop (Phase 9). v1.3: inference rows whose
+    /// ProcessedAt aged out are purged with their events (the FTS triggers
+    /// keep the index in sync). Returns events deleted.
     pub fn compact_old_events(&self, max_age_days: i64) -> rusqlite::Result<i64> {
         let secs = max_age_days.max(0) as u64 * 86_400;
         let cutoff = Timestamp::now() - std::time::Duration::from_secs(secs);
+        let cutoff_o = format_o(&cutoff);
         let deleted = self.conn.execute(
             "DELETE FROM ActivityEvents WHERE Timestamp < ?1",
-            params![format_o(&cutoff)],
+            params![cutoff_o],
         )?;
+        let inferences = self.conn.execute(
+            "DELETE FROM InferenceResults WHERE ProcessedAt < ?1",
+            params![cutoff_o],
+        )?;
+        if inferences > 0 {
+            tracing::info!(inferences, "Compaction purged aged inference rows with their events");
+        }
         self.conn.execute_batch("VACUUM")?;
         Ok(deleted as i64)
+    }
+
+    /// v1.3 digest helpers. All bounds are UTC "O" TEXT timestamps.
+    pub fn event_type_count(&self, from_o: &str, to_o: &str, event_type: &str) -> rusqlite::Result<i64> {
+        self.conn.query_row(
+            "SELECT COUNT(*) FROM ActivityEvents WHERE Timestamp BETWEEN ?1 AND ?2 AND EventType = ?3",
+            params![from_o, to_o, event_type],
+            |r| r.get::<_, i64>(0),
+        )
+    }
+
+    /// (active, idle) event counts in the window.
+    pub fn idle_counts(&self, from_o: &str, to_o: &str) -> rusqlite::Result<(i64, i64)> {
+        self.conn.query_row(
+            "SELECT COALESCE(SUM(CASE WHEN IsIdle = 0 THEN 1 ELSE 0 END), 0),
+                    COALESCE(SUM(CASE WHEN IsIdle = 1 THEN 1 ELSE 0 END), 0)
+             FROM ActivityEvents WHERE Timestamp BETWEEN ?1 AND ?2",
+            params![from_o, to_o],
+            |r| Ok((r.get::<_, i64>(0)?, r.get::<_, i64>(1)?)),
+        )
+    }
+
+    /// (UTC hour, count) for active events, busiest first.
+    pub fn busiest_hours(&self, from_o: &str, to_o: &str) -> rusqlite::Result<Vec<(i64, i64)>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT CAST(strftime('%H', Timestamp) AS INTEGER) AS h, COUNT(*) AS c
+             FROM ActivityEvents
+             WHERE Timestamp BETWEEN ?1 AND ?2 AND IsIdle = 0
+             GROUP BY h ORDER BY c DESC LIMIT 5",
+        )?;
+        let rows = stmt.query_map(params![from_o, to_o], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, i64>(1)?)))?;
+        rows.collect()
+    }
+
+    /// Top AI-written topics in the window.
+    pub fn top_topics(&self, from_o: &str, to_o: &str, limit: i64) -> rusqlite::Result<Vec<(String, i64)>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT Topic, COUNT(*) AS c FROM InferenceResults
+             WHERE ProcessedAt BETWEEN ?1 AND ?2 AND Topic IS NOT NULL AND Topic <> ''
+             GROUP BY Topic ORDER BY c DESC LIMIT ?3",
+        )?;
+        let rows = stmt.query_map(params![from_o, to_o, limit], |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?)))?;
+        rows.collect()
     }
 }
 

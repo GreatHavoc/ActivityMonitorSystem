@@ -64,6 +64,20 @@ enum Commands {
         /// LLM-optimized report (schema 3.0-llm) — Phase 4, not yet ported
         #[arg(long)]
         llm: bool,
+        /// v1.3: weekly digest as a Markdown file instead of the JSON report
+        #[arg(long)]
+        week: bool,
+    },
+    /// Export raw events and AI summaries as JSON or Markdown (data ownership, v1.3)
+    Export {
+        #[arg(long)]
+        from: Option<String>,
+        #[arg(long)]
+        to: Option<String>,
+        #[arg(long)]
+        output: Option<String>,
+        #[arg(long, default_value = "json")]
+        format: String,
     },
 }
 
@@ -122,7 +136,8 @@ fn main() -> ExitCode {
         Some(Commands::Timeline { from, to }) => run_timeline(from, to),
         Some(Commands::Detailed { from, to, limit }) => run_detailed(from, to, limit),
         Some(Commands::Summary { date }) => run_summary(date),
-        Some(Commands::Report { from, to, output, format, llm }) => run_report(from, to, output, format, llm),
+        Some(Commands::Report { from, to, output, format, llm, week }) => run_report(from, to, output, format, llm, week),
+        Some(Commands::Export { from, to, output, format }) => run_export(from, to, output, format),
         None => {
             let mut cmd = Cli::command();
             let _ = cmd.print_help();
@@ -509,12 +524,156 @@ fn run_summary(date: Option<String>) -> ExitCode {
     ExitCode::SUCCESS
 }
 
-/// Port of HandleReportCommand: report v2.0 JSON export (LLM 3.0-llm is Phase 4).
-fn run_report(from: Option<String>, to: Option<String>, output: Option<String>, format: String, llm: bool) -> ExitCode {
+/// v1.3: `report --week` writes the weekly digest as a Markdown file.
+fn run_week(db: &ActivityDatabase, from: Option<String>, to: Option<String>, output: Option<String>) -> ExitCode {
+    let from_o = match date_bound(from.as_deref(), timefmt::days_ago_o(7)) {
+        Ok(v) => v,
+        Err(c) => return c,
+    };
+    let to_o = match date_bound(to.as_deref(), timefmt::now_o()) {
+        Ok(v) => v,
+        Err(c) => return c,
+    };
+    let stats = match activity_monitor_core::digest::weekly_stats(db, &from_o, &to_o) {
+        Ok(s) => s,
+        Err(e) => return fail(e),
+    };
+    let md = activity_monitor_core::digest::render_markdown(&stats);
+    let output_path = output.unwrap_or_else(|| {
+        format!(
+            "activity-digest-{}.md",
+            from_o.get(..10).unwrap_or("period")
+        )
+    });
+    if let Some(parent) = std::path::Path::new(&output_path).parent() {
+        if !parent.as_os_str().is_empty() {
+            if let Err(e) = std::fs::create_dir_all(parent) {
+                return fail(e);
+            }
+        }
+    }
+    if let Err(e) = std::fs::write(&output_path, md) {
+        return fail(e);
+    }
+    println!(
+        "{}",
+        format!(
+            "Weekly digest exported to {output_path} ({} events, {} AI summaries)",
+            stats.total_events, stats.inference_count
+        )
+        .green()
+    );
+    ExitCode::SUCCESS
+}
+
+/// v1.3: `export` writes the raw records (events + AI summaries) as JSON or
+/// Markdown, so the user's history is a file they own.
+fn run_export(from: Option<String>, to: Option<String>, output: Option<String>, format: String) -> ExitCode {
     let db = match open_db_quiet() {
         Ok(d) => d,
         Err(c) => return c,
     };
+    let from_o = match date_bound(from.as_deref(), timefmt::days_ago_o(30)) {
+        Ok(v) => v,
+        Err(c) => return c,
+    };
+    let to_o = match date_bound(to.as_deref(), timefmt::now_o()) {
+        Ok(v) => v,
+        Err(c) => return c,
+    };
+    let events = match db.query_event_rows(&from_o, &to_o, 1_000_000) {
+        Ok(r) => r,
+        Err(e) => return fail(e),
+    };
+    let inferences = match db.detailed_rows(&from_o, &to_o, 1_000_000) {
+        Ok(r) => r,
+        Err(e) => return fail(e),
+    };
+    let format_norm = if format.trim().is_empty() {
+        "json".to_string()
+    } else {
+        format.trim().to_lowercase()
+    };
+    let content = match format_norm.as_str() {
+        "md" | "markdown" => {
+            let mut md = String::new();
+            md.push_str(&format!("# Activity export\n\nFrom: {from_o}\nTo: {to_o}\n\n"));
+            md.push_str(&format!("## Events ({})\n\n", events.len()));
+            for e in &events {
+                md.push_str(&format!(
+                    "- {} | {} | {} | {} | {}\n",
+                    e.timestamp,
+                    e.event_type,
+                    e.process_name.as_deref().unwrap_or("-"),
+                    trunc(&e.window_title.clone().unwrap_or_default(), 60),
+                    if e.is_idle { "Idle" } else { "Active" }
+                ));
+            }
+            md.push_str(&format!("\n## AI summaries ({})\n\n", inferences.len()));
+            for r in &inferences {
+                md.push_str(&format!(
+                    "### {} ({})\n\nApp: {} | Topic: {} | Confidence: {}%\n\n{}\n\n",
+                    r.activity_label.as_deref().unwrap_or("Unknown"),
+                    r.processed_at,
+                    r.application.as_deref().unwrap_or("N/A"),
+                    r.topic.as_deref().unwrap_or("N/A"),
+                    (r.confidence * 100.0).round() as i64,
+                    r.summary.as_deref().unwrap_or("")
+                ));
+            }
+            md
+        }
+        _ => {
+            let value = serde_json::json!({
+                "exportedAt": timefmt::now_o(),
+                "from": from_o,
+                "to": to_o,
+                "events": events.iter().map(|e| serde_json::json!({
+                    "timestamp": e.timestamp, "eventType": e.event_type,
+                    "processName": e.process_name, "windowTitle": e.window_title,
+                    "isIdle": e.is_idle
+                })).collect::<Vec<_>>(),
+                "inferences": inferences.iter().map(|r| serde_json::json!({
+                    "processedAt": r.processed_at, "activityLabel": r.activity_label,
+                    "application": r.application, "contentType": r.content_type,
+                    "topic": r.topic, "action": r.action, "summary": r.summary,
+                    "visibleText": r.visible_text, "confidence": r.confidence
+                })).collect::<Vec<_>>(),
+            });
+            match serde_json::to_string_pretty(&value) {
+                Ok(j) => j,
+                Err(e) => return fail(e),
+            }
+        }
+    };
+    match output {
+        Some(p) => {
+            if let Some(parent) = std::path::Path::new(&p).parent() {
+                if !parent.as_os_str().is_empty() {
+                    if let Err(e) = std::fs::create_dir_all(parent) {
+                        return fail(e);
+                    }
+                }
+            }
+            if let Err(e) = std::fs::write(&p, &content) {
+                return fail(e);
+            }
+            println!("{}", format!("Export written to {p}").green());
+        }
+        None => println!("{content}"),
+    }
+    ExitCode::SUCCESS
+}
+
+/// Port of HandleReportCommand: report v2.0 JSON export (LLM 3.0-llm is Phase 4).
+fn run_report(from: Option<String>, to: Option<String>, output: Option<String>, format: String, llm: bool, week: bool) -> ExitCode {
+    let db = match open_db_quiet() {
+        Ok(d) => d,
+        Err(c) => return c,
+    };
+    if week {
+        return run_week(&db, from, to, output);
+    }
     let parse_date = |s: Option<&str>, default: jiff::civil::Date| -> Result<jiff::civil::Date, ExitCode> {
         match s {
             None => Ok(default),

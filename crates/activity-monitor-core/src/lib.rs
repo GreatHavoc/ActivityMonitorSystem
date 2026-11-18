@@ -1,6 +1,7 @@
 pub mod config;
 #[cfg(windows)]
 pub mod capture;
+pub mod digest;
 #[cfg(windows)]
 pub mod dxgi;
 pub mod rank;

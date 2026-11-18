@@ -1,5 +1,13 @@
 # Release Notes — Rust port (publish2/)
 
+## v1.3.0 (2026-11-18)
+
+- Data ownership. A new `export` CLI command writes the raw records (events and AI summaries) as JSON or Markdown with a `--from`/`--to` range, so your history is a file you own and a GDPR-style export/erasure is one command. Compaction now purges AI summaries together with their events once they age past `MaxEventAgeDays`, and a new `ExcludedProcesses` list in `appsettings.json` stops recording for named apps entirely: no focus event, no capture while they are in the foreground.
+- Weekly digest. `report --week` on the CLI and the new `weekly_digest` MCP tool (the seventh tool) aggregate the last 7 days into a Markdown digest: event counts, context switches, top apps, AI category distribution, top topics, busiest hours. Both surfaces use the same aggregation in `core/src/digest.rs`.
+- Trust and distribution. The repo ships `server.json` (MCP server card) and every release carries a `SHA256SUMS.txt` asset, so agents can verify the binary before connecting. GitHub attestation is the follow-up; the local `gh` CLI has no `attest` command yet. The MCP server stays read-only and binds HTTP to 127.0.0.1 only.
+- The README now maps the privacy posture to the rules that apply: local-only data, invisible capture on Windows, export and purge controls, and a workplace-use note covering the EU AI Act (high-risk duties enforceable since 2026-08-02), California AB 1331 and GDPR.
+- Tests: workspace 72/72 green, including exclusion matching, compaction purging inference rows, digest rendering and the 7-tool MCP list. CI green on `rust-release`.
+
 ## v1.2.0 (2026-11-18)
 
 - `search_activity`, the MCP server's sixth tool, now runs hybrid search. One leg is FTS5 bm25 over the AI-written app, topic, summary and visible text, kept in sync by triggers inside the same SQLite file, with a LIKE fallback on databases the .NET app created. The other is trigram fuzzy matching, which tolerates typos and paraphrases. Results are RRF-merged and each hit is tagged `matchType: keyword|fuzzy|both`. We looked at embeddings and decided against an ML runtime: fastembed/ONNX Runtime does not link on current MSVC toolchains (LNK2019 on the CRT imports), sqlite-vec is still pre-1.0, and Ollama embeddings would compete with the vision model for the GPU. No new dependencies, nothing to download, works on any machine. If FTS is missing, search degrades to LIKE plus trigram.

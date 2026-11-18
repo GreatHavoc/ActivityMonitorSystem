@@ -133,6 +133,20 @@ pub fn tool_defs() -> Value {
             }, vec!["question"]),
             "outputSchema": obj(json!({ "answer": {"type":"string"}, "date": {"type":"string"} }), vec!["answer", "date"]),
             "annotations": read_only
+        },
+        {
+            "name": "weekly_digest",
+            "title": "Weekly shape-of-your-work digest (Markdown)",
+            "description": "Aggregates a 7-day window (default: last 7 days, or explicit from/to dates) into a Markdown digest: events, context switches, top apps, AI category distribution, top topics, busiest hours. Read-only and fully local; the same digest the CLI writes with report --week.",
+            "inputSchema": obj({
+                let p = json!({
+                    "from": { "type": "string", "description": "Start local date YYYY-MM-DD (default: 7 days ago)" },
+                    "to": { "type": "string", "description": "End local date YYYY-MM-DD (default: today)" }
+                }).as_object().unwrap().clone();
+                Value::Object(p)
+            }, vec![]),
+            "outputSchema": obj(json!({ "from": {"type":"string"}, "to": {"type":"string"}, "markdown": {"type":"string"}, "stats": {"type":"object"} }), vec!["from", "to", "markdown"]),
+            "annotations": read_only
         }
     ])
 }
@@ -145,6 +159,7 @@ pub async fn call(state: &Arc<ToolState>, name: &str, args: &Value, cancel: &Ato
         "daily_report" => daily_report(state, args),
         "search_activity" => search_activity(state, args),
         "ask_about_my_day" => ask_about_my_day(state, args, cancel).await,
+        "weekly_digest" => weekly_digest(state, args),
         _ => Err(format!("Unknown tool: {name}")),
     }
 }
@@ -322,6 +337,46 @@ fn search_activity(state: &Arc<ToolState>, args: &Value) -> Result<Value, String
         "query": query,
         "count": matches.len(),
         "matches": matches,
+    }))
+}
+
+/// v1.3 weekly digest: same aggregation as `cli report --week`, returned as
+/// Markdown plus structured stats. Default window: last 7 days.
+fn weekly_digest(state: &ToolState, args: &Value) -> Result<Value, String> {
+    let guard = need_db(state)?;
+    let db = guard.as_ref().unwrap();
+    let today = timefmt::today_local_date().to_string();
+    let to_d = args.get("to").and_then(|d| d.as_str()).filter(|s| !s.is_empty()).unwrap_or(&today).to_string();
+    timefmt::parse_local_date(&to_d).map_err(|e| format!("Invalid date '{to_d}': {e}"))?;
+    let from_d = match args.get("from").and_then(|d| d.as_str()).filter(|s| !s.is_empty()) {
+        Some(d) => {
+            timefmt::parse_local_date(d).map_err(|e| format!("Invalid date '{d}': {e}"))?;
+            d.to_string()
+        }
+        None => timefmt::days_ago_o(7).get(..10).unwrap_or(&today).to_string(),
+    };
+    let from_o = timefmt::local_date_to_utc_o(&from_d).map_err(|e| e.to_string())?;
+    let to_o = timefmt::next_day_local_midnight_utc_o(&to_d).map_err(|e| e.to_string())?;
+    let stats = activity_monitor_core::digest::weekly_stats(db, &from_o, &to_o).map_err(|e| e.to_string())?;
+    let markdown = activity_monitor_core::digest::render_markdown(&stats);
+    let (total, coding, web, docs, videos, comm) = stats.distribution;
+    Ok(json!({
+        "from": from_d,
+        "to": to_d,
+        "markdown": markdown,
+        "stats": {
+            "totalEvents": stats.total_events,
+            "activeEvents": stats.active_events,
+            "idleEvents": stats.idle_events,
+            "focusChanges": stats.focus_changes,
+            "inferenceCount": stats.inference_count,
+            "distribution": { "coding": coding, "web": web, "documents": docs, "videos": videos, "communication": comm },
+            "topAppsEvents": stats.top_apps_events.iter().map(|(a, c)| json!({ "app": a, "count": c })).collect::<Vec<_>>(),
+            "topAppsInference": stats.top_apps_inference.iter().map(|(a, c)| json!({ "app": a, "count": c })).collect::<Vec<_>>(),
+            "topTopics": stats.top_topics.iter().map(|(t, c)| json!({ "topic": t, "count": c })).collect::<Vec<_>>(),
+            "busiestHoursUtc": stats.busiest_hours.iter().map(|(h, c)| json!({ "hour": h, "count": c })).collect::<Vec<_>>(),
+            "total": total
+        }
     }))
 }
 
