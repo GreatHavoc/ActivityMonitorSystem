@@ -53,3 +53,5 @@ secrets.json
 *.pdb
 *.deps.json
 *.runtimeconfig.json
+.fastembed_cache/
+

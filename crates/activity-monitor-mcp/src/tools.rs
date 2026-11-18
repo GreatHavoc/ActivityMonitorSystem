@@ -1,4 +1,4 @@
-//! Read-only tools over the Activity Monitor SQLite DB (+ Ollama for the ask tool).
+﻿//! Read-only tools over the Activity Monitor SQLite DB (+ Ollama for the ask tool).
 
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -108,11 +108,11 @@ pub fn tool_defs() -> Value {
         },
         {
             "name": "search_activity",
-            "title": "Search recorded activity by keyword",
-            "description": "Case-insensitive keyword search over the AI-written fields of past activity days (app, topic, summary, visible text), newest first. Keyword-only today; semantic search lands with the vector index.",
+            "title": "Search recorded activity (ranked + fuzzy)",
+            "description": "Hybrid search over past activity days: FTS5 bm25-ranked lexical match over the AI-written fields (app, topic, summary, visible text) plus a trigram-fuzzy leg for typos and shared vocabulary, RRF-merged. Fully local — no ML runtime, no GPU.",
             "inputSchema": obj({
                 let p = json!({
-                    "query": { "type": "string", "description": "Keywords to search for, e.g. 'tableau' or 'standup'" },
+                    "query": { "type": "string", "description": "Keywords or a natural-language question, e.g. 'tableau' or 'what was I working on yesterday'" },
                     "from": { "type": "string", "description": "Start local date YYYY-MM-DD (default: today)" },
                     "to": { "type": "string", "description": "End local date YYYY-MM-DD (default: today)" },
                     "limit": { "type": "number", "description": "Max hits (default 20, max 200)", "default": 20 }
@@ -282,15 +282,17 @@ fn daily_report(state: &ToolState, args: &Value) -> Result<Value, String> {
     }))
 }
 
-fn search_activity(state: &ToolState, args: &Value) -> Result<Value, String> {
-    let guard = need_db(state)?;
-    let db = guard.as_ref().unwrap();
+/// v1.2 hybrid search: FTS5 bm25 lexical leg + trigram fuzzy leg (see
+/// core::rank for what was rejected and why).
+fn search_activity(state: &Arc<ToolState>, args: &Value) -> Result<Value, String> {
     let query = args
         .get("query")
         .and_then(|q| q.as_str())
         .map(str::trim)
         .filter(|q| !q.is_empty())
         .ok_or("Missing required argument: query")?;
+    let guard = need_db(state)?;
+    let db = guard.as_ref().unwrap();
     let (from_o, to_o) = range_bounds(
         args.get("from").and_then(|d| d.as_str()),
         args.get("to").and_then(|d| d.as_str()),
@@ -300,20 +302,14 @@ fn search_activity(state: &ToolState, args: &Value) -> Result<Value, String> {
         .and_then(|l| l.as_i64())
         .unwrap_or(20)
         .clamp(1, 200);
-    let pattern = format!("%{}%", activity_monitor_core::db::escape_like(query));
-    let hits = activity_monitor_core::db::search_inference_results(
-        db.conn(),
-        &pattern,
-        &from_o,
-        &to_o,
-        limit,
-    )
-    .map_err(|e| e.to_string())?;
+    let hits = activity_monitor_core::db::search_hybrid(db.conn(), query, &from_o, &to_o, limit)
+        .map_err(|e| e.to_string())?;
     let matches: Vec<Value> = hits
         .iter()
         .map(|h| {
             json!({
                 "timestamp": h.processed_at,
+                "matchType": h.match_type,
                 "activityLabel": h.activity_label,
                 "application": h.application,
                 "topic": h.topic,

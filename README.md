@@ -62,7 +62,7 @@ Streamable HTTP on 127.0.0.1 with `--http <port>`; `--db <path>` or
 | `session_summary` | time per app, category distribution, labels seen |
 | `activity_at` | what was on screen in a window around a timestamp |
 | `daily_report` | structured JSON report for a day |
-| `search_activity` | keyword search over past days' app/topic/summary/visible-text (newest first, `from`/`to`/`limit`) |
+| `search_activity` | hybrid search over past days: FTS5-ranked lexical + trigram fuzzy (typos/shared vocabulary), RRF-merged, `from`/`to`/`limit` |
 | `ask_about_my_day` | free-form question answered by the local Ollama model, grounded only in your data |
 
 Example (stdio, one request per line):

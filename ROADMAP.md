@@ -149,9 +149,14 @@ substrate.
 - **Privacy/consent posture as the product story** — README "Privacy &
   consent" section shipped (local-only data, capture invisibility explained,
   purge/retention controls documented)
-- **MCP as the product surface** — `search_activity` (keyword over past days,
-  with `from`/`to`/`limit`) shipped in v1.2-dev; semantic search (sqlite-vec)
-  and MCP Server Card (`.well-known`) metadata to follow
+- **MCP as the product surface** — `search_activity` (hybrid search over past
+  days, with `from`/`to`/`limit`) shipped in v1.2-dev. Design decision after
+  research: **no ML runtime** — ranking is FTS5 bm25 (inside the bundled
+  SQLite) + a trigram fuzzy leg, RRF-merged. Rejected: fastembed/ORT (cannot
+  link on current MSVC toolchains; load-dynamic needs an externally-sourced
+  `onnxruntime.dll`), sqlite-vec (pre-v-v1 extension), Ollama embeddings
+  (GPU is the vision model's). Zero deps, zero download, works on every
+  machine. MCP Server Card (`.well-known`) metadata to follow
 - **Service install on real machines** — elevated `install-service.ps1` run
   and a documented Scheduled-Task fallback for non-admin users
 - **DXGI Desktop Duplication capture backend** — shipped, opt-in via
@@ -166,10 +171,6 @@ substrate.
   degrades to the GDI fallback instead of failing.
 
 ### Next — the following 1–3 months
-- **Semantic search in the same SQLite file** — sqlite-vec + FTS5 hybrid
-  retrieval with local embeddings; ship as a *degradable* derived index
-  (keyword search keeps working if the extension fails). Powers MCP
-  `search_activity` v2.
 - **Runtime flexibility** — swap the Ollama endpoint for Foundry Local /
   Windows ML (OpenAI-compatible) so Copilot+ PCs get NPU inference.
 

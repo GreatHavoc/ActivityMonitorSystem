@@ -3,6 +3,7 @@ pub mod config;
 pub mod capture;
 #[cfg(windows)]
 pub mod dxgi;
+pub mod rank;
 pub mod db;
 pub mod logging;
 pub mod models;

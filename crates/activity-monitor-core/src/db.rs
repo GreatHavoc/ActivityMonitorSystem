@@ -1,4 +1,4 @@
-//! SQLite storage layer. DDL and SQL ported verbatim from ActivityDatabase.cs so
+﻿//! SQLite storage layer. DDL and SQL ported verbatim from ActivityDatabase.cs so
 //! the database file stays byte-compatible (same tables, indexes, "O" TEXT
 //! timestamps). One long-lived connection replaces the C# per-operation churn.
 
@@ -45,6 +45,68 @@ const DDL: &str = "
     CREATE INDEX IF NOT EXISTS IX_InferenceResults_ActivityLabel ON InferenceResults(ActivityLabel);
 ";
 
+/// v1.2 "semantic" search (additive; the .NET build ignores unknown objects).
+/// External-content FTS5 over the AI-written text, kept in sync by triggers,
+/// backfilled by `init_fts`. FTS5 rides inside the bundled SQLite â€” no ML
+/// runtime, no GPU, no download (see rank.rs for what was rejected).
+const FTS_DDL: &str = "
+    CREATE VIRTUAL TABLE IF NOT EXISTS InferenceFts USING fts5(
+        Text, content='InferenceResults', content_rowid='Id'
+    );
+    CREATE TRIGGER IF NOT EXISTS InferenceFts_ai AFTER INSERT ON InferenceResults BEGIN
+        INSERT INTO InferenceFts(rowid, Text) VALUES (
+            new.Id,
+            new.ActivityLabel || ' ' || COALESCE(new.Application,'') || ' ' ||
+            COALESCE(new.Topic,'') || ' ' || new.Summary || ' ' || COALESCE(new.VisibleText,'')
+        );
+    END;
+    CREATE TRIGGER IF NOT EXISTS InferenceFts_ad AFTER DELETE ON InferenceResults BEGIN
+        INSERT INTO InferenceFts(InferenceFts, rowid, Text) VALUES (
+            'delete', old.Id,
+            old.ActivityLabel || ' ' || COALESCE(old.Application,'') || ' ' ||
+            COALESCE(old.Topic,'') || ' ' || old.Summary || ' ' || COALESCE(old.VisibleText,'')
+        );
+    END;
+    CREATE TRIGGER IF NOT EXISTS InferenceFts_au AFTER UPDATE ON InferenceResults BEGIN
+        INSERT INTO InferenceFts(InferenceFts, rowid, Text) VALUES (
+            'delete', old.Id,
+            old.ActivityLabel || ' ' || COALESCE(old.Application,'') || ' ' ||
+            COALESCE(old.Topic,'') || ' ' || old.Summary || ' ' || COALESCE(old.VisibleText,'')
+        );
+        INSERT INTO InferenceFts(rowid, Text) VALUES (
+            new.Id,
+            new.ActivityLabel || ' ' || COALESCE(new.Application,'') || ' ' ||
+            COALESCE(new.Topic,'') || ' ' || new.Summary || ' ' || COALESCE(new.VisibleText,'')
+        );
+    END;
+";
+
+/// True when the FTS5 index exists on this connection (false on read-only
+/// connections to DBs the .NET app created â€” those fall back to LIKE).
+pub fn fts_available(conn: &Connection) -> bool {
+    conn.query_row(
+        "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='InferenceFts'",
+        [],
+        |r| r.get::<_, i64>(0),
+    )
+    .map(|n| n > 0)
+    .unwrap_or(false)
+}
+
+/// Create the FTS index + triggers and backfill from existing rows. Any SQLite
+/// build without FTS5 (or a read-only DB) simply leaves search at LIKE+trigram.
+pub fn init_fts(conn: &Connection) -> rusqlite::Result<usize> {
+    if !fts_available(conn) {
+        conn.execute_batch(FTS_DDL).map_err(|e| {
+            tracing::warn!("FTS5 unavailable; ranked search falls back to LIKE + trigram ({e})");
+            e
+        })?;
+    }
+    conn.execute("INSERT INTO InferenceFts(InferenceFts) VALUES('rebuild')", [])?;
+    conn.query_row("SELECT COUNT(*) FROM InferenceFts", [], |r| r.get::<_, i64>(0))
+        .map(|n| n as usize)
+}
+
 /// Row shape of the CLI `query` command's SELECT (ported verbatim).
 pub struct EventRow {
     pub timestamp: String,
@@ -57,12 +119,16 @@ pub struct EventRow {
 /// One keyword-search hit over the AI-written fields of `InferenceResults`
 /// (v1.2 `search_activity`; keyword-only until the sqlite-vec index lands).
 pub struct SearchHitRow {
+    pub inference_id: i64,
     pub processed_at: String,
     pub activity_label: String,
     pub application: Option<String>,
     pub topic: Option<String>,
     pub summary: String,
     pub visible_text: Option<String>,
+    /// Which leg(s) of the hybrid match produced this row:
+    /// "keyword", "semantic" or "both" (RRF-merged).
+    pub match_type: String,
 }
 
 /// Keyword search over `InferenceResults` in a time window, newest first.
@@ -75,7 +141,7 @@ pub fn search_inference_results(
     limit: i64,
 ) -> rusqlite::Result<Vec<SearchHitRow>> {
     let mut stmt = conn.prepare(
-        "SELECT ProcessedAt, ActivityLabel, Application, Topic, Summary, VisibleText
+        "SELECT Id, ProcessedAt, ActivityLabel, Application, Topic, Summary, VisibleText
          FROM InferenceResults
          WHERE ProcessedAt >= ?1 AND ProcessedAt < ?2
            AND (COALESCE(Application,'') || ' ' || COALESCE(Topic,'') || ' '
@@ -85,12 +151,14 @@ pub fn search_inference_results(
     let rows = stmt
         .query_map(params![from_o, to_o, pattern, limit], |r| {
             Ok(SearchHitRow {
-                processed_at: r.get(0)?,
-                activity_label: r.get(1)?,
-                application: r.get(2)?,
-                topic: r.get(3)?,
-                summary: r.get(4)?,
-                visible_text: r.get(5)?,
+                inference_id: r.get(0)?,
+                processed_at: r.get(1)?,
+                activity_label: r.get(2)?,
+                application: r.get(3)?,
+                topic: r.get(4)?,
+                summary: r.get(5)?,
+                visible_text: r.get(6)?,
+                match_type: "keyword".into(),
             })
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
@@ -110,6 +178,121 @@ pub fn escape_like(s: &str) -> String {
     out
 }
 
+/// Fuzzy leg: score every candidate row in the window by trigram similarity
+/// to the query, keep those above `FUZZY_FLOOR`. Personal-scale (90 days â‰ˆ
+/// hundreds of rows), so a plain scan is fine and needs no index.
+pub fn search_fuzzy(conn: &Connection, query: &str, from_o: &str, to_o: &str, limit: i64) -> rusqlite::Result<Vec<i64>> {
+    let mut stmt = conn.prepare(
+        "SELECT Id, ActivityLabel, COALESCE(Application,''), COALESCE(Topic,''),
+                Summary, COALESCE(VisibleText,'')
+         FROM InferenceResults WHERE ProcessedAt >= ?1 AND ProcessedAt < ?2",
+    )?;
+    let rows = stmt
+        .query_map(params![from_o, to_o], |r| {
+            Ok((
+                r.get::<_, i64>(0)?,
+                vec![
+                    r.get::<_, String>(1)?,
+                    r.get::<_, String>(2)?,
+                    r.get::<_, String>(3)?,
+                    r.get::<_, String>(4)?,
+                    r.get::<_, String>(5)?,
+                ],
+            ))
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    let mut scored: Vec<(f32, i64)> = rows
+        .into_iter()
+        .map(|(id, parts)| (crate::rank::trigram_similarity(query, &parts.join(" ")), id))
+        .filter(|(s, _)| *s >= crate::rank::FUZZY_FLOOR)
+        .collect();
+    scored.sort_by(|a, b| {
+        b.0.partial_cmp(&a.0)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then(a.1.cmp(&b.1))
+    });
+    Ok(scored
+        .into_iter()
+        .map(|(_, id)| id)
+        .take((limit * 4).max(4) as usize)
+        .collect())
+}
+
+/// Lexical leg: FTS5 bm25 when the index exists (service-created DBs), LIKE
+/// otherwise (DBs the .NET app created, read-only for the MCP server).
+pub fn search_lexical(conn: &Connection, query: &str, from_o: &str, to_o: &str, limit: i64) -> rusqlite::Result<Vec<i64>> {
+    let limit = (limit * 4).max(4);
+    if fts_available(conn) {
+        let q = crate::rank::fts_query(query);
+        if q.is_empty() {
+            return Ok(vec![]);
+        }
+        let mut stmt = conn.prepare(
+            "SELECT f.rowid
+             FROM InferenceFts f JOIN InferenceResults r ON r.Id = f.rowid
+             WHERE InferenceFts MATCH ?1 AND r.ProcessedAt >= ?2 AND r.ProcessedAt < ?3
+             ORDER BY bm25(InferenceFts) LIMIT ?4",
+        )?;
+        let rows = stmt
+            .query_map(params![q, from_o, to_o, limit], |r| r.get::<_, i64>(0))?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        return Ok(rows);
+    }
+    let pattern = format!("%{}%", escape_like(query));
+    Ok(search_inference_results(conn, &pattern, from_o, to_o, limit)?
+        .into_iter()
+        .map(|r| r.inference_id)
+        .collect())
+}
+
+/// Hybrid search (v1.2): lexical leg (FTS5 bm25 or LIKE) + trigram fuzzy leg,
+/// RRF-merged. `match_type` is "keyword", "fuzzy" or "both" per row.
+pub fn search_hybrid(conn: &Connection, query: &str, from_o: &str, to_o: &str, limit: i64) -> rusqlite::Result<Vec<SearchHitRow>> {
+    let lexical_ids = search_lexical(conn, query, from_o, to_o, limit)?;
+    let fuzzy_ids = search_fuzzy(conn, query, from_o, to_o, limit)?;
+    let merged = crate::rank::rrf_merge(&lexical_ids, &fuzzy_ids);
+
+    let mut out = Vec::new();
+    for (id, _) in merged.into_iter().take(limit.max(1) as usize) {
+        if let Some(mut row) = fetch_hit_row(conn, id)? {
+            let kw = lexical_ids.contains(&id);
+            let fz = fuzzy_ids.contains(&id);
+            row.match_type = match (kw, fz) {
+                (true, true) => "both".into(),
+                (true, false) => "keyword".into(),
+                (false, true) => "fuzzy".into(),
+                (false, false) => unreachable!("merged ids come from one of the two lists"),
+            };
+            out.push(row);
+        }
+    }
+    Ok(out)
+}
+
+fn fetch_hit_row(conn: &Connection, id: i64) -> rusqlite::Result<Option<SearchHitRow>> {
+    conn.query_row(
+        "SELECT ProcessedAt, ActivityLabel, Application, Topic, Summary, VisibleText
+         FROM InferenceResults WHERE Id = ?1",
+        params![id],
+        |r| {
+            Ok(SearchHitRow {
+                inference_id: id,
+                processed_at: r.get(0)?,
+                activity_label: r.get(1)?,
+                application: r.get(2)?,
+                topic: r.get(3)?,
+                summary: r.get(4)?,
+                visible_text: r.get(5)?,
+                match_type: String::new(),
+            })
+        },
+    )
+    .map(Some)
+    .or_else(|e| match e {
+        rusqlite::Error::QueryReturnedNoRows => Ok(None),
+        e => Err(e),
+    })
+}
 pub struct ActivityDatabase {
     conn: Connection,
 }
@@ -140,7 +323,13 @@ impl ActivityDatabase {
 
     pub fn initialize(&self) -> rusqlite::Result<()> {
         self.conn.execute_batch(DDL)?;
-        self.migrate_schema()
+        self.migrate_schema()?;
+        // v1.2 "semantic" index. Non-fatal: a build without FTS5 -> search
+        // degrades to LIKE + trigram.
+        if let Err(e) = crate::db::init_fts(&self.conn) {
+            tracing::warn!("FTS5 index unavailable; ranked search will use LIKE + trigram ({e})");
+        }
+        Ok(())
     }
 
     /// Auto-migration from ActivityDatabase.cs: ALTER TABLE ADD COLUMN for the
@@ -676,6 +865,83 @@ mod tests {
         let det = det.unwrap();
         assert!(det.contains("\"Label\":\"editor\""), "got: {det}");
         assert!(det.contains("\"BoundingBox\":{\"X\":1"));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+#[test]
+fn search_hybrid_merges_lexical_and_fuzzy_legs() {
+        let (dir, db) = temp_db("hybrid");
+        let mk = |ts: &str, label: &str, app: &str, topic: &str, summary: &str, visible: &str| InferenceResult {
+            request_id: uuid::Uuid::new_v4(),
+            processed_at: parse_o(ts).unwrap(),
+            activity_label: label.into(),
+            application: app.into(),
+            content_type: "image".into(),
+            topic: topic.into(),
+            action: "writing".into(),
+            summary: summary.into(),
+            visible_text: visible.into(),
+            detected_objects: None,
+            confidence: 0.9,
+            raw_response: None,
+        };
+        db.save_inference_result(&mk(
+            "2026-11-13T08:06:00.0000000Z",
+            "analysis",
+            "tableau",
+            "dashboard review",
+            "Reviewing the tableau sales dashboard",
+            "Sales dashboard",
+        ))
+        .unwrap();
+        db.save_inference_result(&mk(
+            "2026-11-13T09:06:00.0000000Z",
+            "writing",
+            "obsidian",
+            "notes",
+            "Writing meeting notes",
+            "Standup notes",
+        ))
+        .unwrap();
+        let ids: Vec<i64> = db
+            .conn
+            .prepare("SELECT Id FROM InferenceResults ORDER BY Id")
+            .unwrap()
+            .query_map([], |r| r.get(0))
+            .unwrap()
+            .collect::<rusqlite::Result<_>>()
+            .unwrap();
+        assert_eq!(ids.len(), 2);
+        let (tableau_id, notes_id) = (ids[0], ids[1]);
+
+        let from = "2026-11-13T00:00:00.0000000Z";
+        let to = "2026-11-14T00:00:00.0000000Z";
+
+        // exact phrase: lexical leg (FTS or LIKE) + fuzzy leg (identical text)
+        // both rank the tableau row -> match_type "both"
+        let hit = search_hybrid(&db.conn, "tableau sales dashboard", from, to, 10).unwrap();
+        assert_eq!(hit.len(), 1, "exact query should only match one row");
+        assert_eq!(hit[0].inference_id, tableau_id);
+        assert_eq!(hit[0].match_type, "both");
+
+        // typo: lexical leg misses, fuzzy leg still finds it
+        let typo = search_hybrid(&db.conn, "reviwing dashboard", from, to, 10).unwrap();
+        assert_eq!(typo.len(), 1);
+        assert_eq!(typo[0].inference_id, tableau_id);
+        assert_eq!(typo[0].match_type, "fuzzy");
+
+        // lexical-only distinctive token: keyword leg, no fuzzy overlap needed
+        let kw = search_hybrid(&db.conn, "obsidian", from, to, 10).unwrap();
+        assert_eq!(kw.len(), 1);
+        assert_eq!(kw[0].inference_id, notes_id);
+
+        // nothing matches either leg
+        let none = search_hybrid(&db.conn, "zzzz qqqq", from, to, 10).unwrap();
+        assert!(none.is_empty());
+
+        // out-of-window: rows live outside [from, to)
+        let outside = search_hybrid(&db.conn, "tableau", "2026-11-14T00:00:00.0000000Z", "2026-11-15T00:00:00.0000000Z", 10).unwrap();
+        assert!(outside.is_empty());
         std::fs::remove_dir_all(&dir).ok();
     }
 

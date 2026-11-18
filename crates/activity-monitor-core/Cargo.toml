@@ -32,6 +32,15 @@ windows = { version = "0.62", features = [
     "Win32_UI_WindowsAndMessaging",
 ] }
 jpeg-encoder = "0.7" # q<90 defaults to 4:2:0 chroma like GDI+; image crate is 4:4:4 and 29% bigger
+# Semantic search (v1.2): local CPU ONNX embedder, no GPU (the vision model
+# owns it) and no Ollama round-trip. BGE-small-en-v1.5, 384-dim, ~67 MB.
+# ort-load-dynamic: ONNX Runtime is dlopen'd at runtime; the prebuilt import
+# lib conflicts with current MSVC CRT (LNK2019 __imp__waccess...).
+# v1.2 "semantic" search deliberately has NO ML runtime: FTS5 (already inside
+# the bundled SQLite) + trigram fuzzy ranking. Rejected after research:
+# fastembed/ort cannot link on current MSVC (LNK2019 __imp__waccess...), its
+# load-dynamic path needs an externally-sourced onnxruntime.dll, and a
+# local-first product should not depend on a C++ runtime it cannot build.
 tokio = { version = "1", features = ["rt", "sync", "time", "macros"] }
 
 [dev-dependencies]
