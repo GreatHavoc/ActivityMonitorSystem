@@ -194,9 +194,62 @@ radioactive).
 
 ---
 
+## v1.3 roadmap — market scan + usage audit (drafted 2026-11-18)
+
+Evidence base: the MCP registry passed 47,000 servers on 2026-10-21 (about 40x
+the end of 2025) with 97M+ monthly SDK downloads, but 2026 security reports
+found exploitable flaws in 30–82% of public MCP servers and 1,184+ confirmed
+malicious entries, so provenance and verification now decide whether agents
+connect at all. EU AI Act high-risk obligations have been enforceable since
+2026-08-02 and Annex III covers worker-management systems, so privacy controls
+are compliance, not marketing. Windows Recall is still Copilot+ only and still
+draws security criticism, which leaves room for a screen-memory tool that runs
+on any PC and stores summaries instead of screenshots. Local-first PKM tools
+keep winning on "your data stays in plain files". Usage audit of our own
+release: one download per release, no telemetry by design, and the local soak
+shows why search matters: 335 raw events in 30 minutes but only 5 inference
+summaries, and databases from older versions have no FTS table, so the
+LIKE+fuzzy fallback is the path most real installs take until the service
+re-indexes. Full notes: brain inbox note `market-research-activity-monitor-v13`.
+
+### Now — next release (v1.3)
+- Data ownership bundle: `cli export` to Markdown and JSON with a date range,
+  purge of inference rows when their events age out, and an `ExcludedProcesses`
+  list in `appsettings.json`. Grounds: GDPR portability/erasure, AI Act data
+  minimization, and the local-first expectation that your history is a file
+  you own.
+- Weekly "shape of your work" digest: a `weekly_digest` MCP tool plus
+  `cli report --week`, written as a Markdown file. Promoted from Later because
+  the data already exists and it is the most visible proof of value.
+- Trust and distribution: SHA256SUMS on every release, `gh` release
+  attestations, an MCP server card (`server.json`) with provenance, registry
+  submission, and a short "for agents" README section. Grounds: 47k servers
+  and a live supply-chain crisis; agents verify a server before connecting.
+- Compliance note in the README: personal-use scope, what changes if the tool
+  is used at work (AI Act Annex III, consent), and how export/delete map to
+  GDPR rights.
+
+### Next — the following 1–3 months
+- NPU text path: send text-only prompts (digest, search explanations) to a
+  small on-device model (Phi Silica / Foundry Local) and keep the vision model
+  for screenshots only, so the GPU stays free for capture.
+- DXGI improvements: dirty-rectangle skipping, one duplicator shared across
+  outputs.
+- Search quality gate: a small golden query set in CI so ranking regressions
+  fail the build instead of reaching users.
+
+### Later — when there is evidence it's worth it
+- Proactive assistant that reads the digest and proposes actions.
+- Phone/wearable context; team or enterprise consent flows.
+- Still rejected: cloud sync, telemetry, keystroke logging, WGC capture,
+  storing raw screenshots.
+
+---
+
 ## Note on the GitHub release pages
 
-Releases exist on `rust-release`: v1.0.0 and v1.1.0 (2026-11-17). Each page
+Releases exist on `rust-release`: v1.0.0, v1.1.0 (2026-11-17), v1.2.0
+(2026-11-18). Each page
 carries only the `publish2/` zip (service + CLI + MCP + `appsettings.json`
 + `install-service.ps1`) — never the legacy .NET `publish/`. Release body =
 `RELEASE_NOTES.md`. `main` stays the .NET original.
