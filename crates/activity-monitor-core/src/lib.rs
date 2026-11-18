@@ -1,6 +1,8 @@
 pub mod config;
 #[cfg(windows)]
 pub mod capture;
+#[cfg(windows)]
+pub mod dxgi;
 pub mod db;
 pub mod logging;
 pub mod models;

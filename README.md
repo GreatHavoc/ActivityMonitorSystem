@@ -113,7 +113,7 @@ Edit `publish2\appsettings.json` (loaded from the exe's folder):
       "TriggerOnFocusChange": true, "TriggerOnIdleResume": true,
       "MaxFramesPerCapture": 1,
       "PeriodicCaptureIntervalSeconds": 180, "MinEventCaptureIntervalSeconds": 10,
-      "CaptureAllMonitors": true
+      "CaptureAllMonitors": true, "CaptureBackend": "gdi"
     },
     "OllamaEndpoint": "http://localhost:11434",
     "OllamaModel": "qwen3-vl:2b",
@@ -137,8 +137,11 @@ model is cold — the clean-install drill needed it when Ollama was busy. `Perio
 were hardcoded to 3 min / 10 s in the C# service and are now configurable
 (defaults keep the old behavior). `CaptureAllMonitors: true` captures the
 whole virtual screen (all monitors) in one frame instead of just the primary
-display; the code default is `false`, matching the C# behavior. Logs go to
-`<exe_dir>\Logs\`.
+display; the code default is `false`, matching the C# behavior. `CaptureBackend`
+selects the capture path: `"gdi"` (default, the C# behavior) or `"dxgi"`
+(Desktop Duplication — also silent, GPU-copied; any failure, including a
+uniform/blank frame from an unsupported adapter, falls back to GDI for that
+capture). Logs go to `<exe_dir>\Logs\`.
 
 ## CLI usage
 

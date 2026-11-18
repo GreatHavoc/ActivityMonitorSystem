@@ -81,6 +81,8 @@ async fn delay_or_cancel(interval: std::time::Duration, cancel: &AtomicBool) {
 
 /// Port of CaptureScreen: primary screen (or the whole virtual screen when
 /// CaptureAllMonitors is set) -> JPEG bytes, None on failure/no screen.
+/// `CaptureBackend: "dxgi"` tries Desktop Duplication first and falls back to
+/// GDI for that capture on any failure.
 pub fn capture_screen(cfg: &CaptureSettings) -> Option<Vec<u8>> {
     match try_capture_screen(cfg) {
         Ok(v) => v,
@@ -92,6 +94,30 @@ pub fn capture_screen(cfg: &CaptureSettings) -> Option<Vec<u8>> {
 }
 
 fn try_capture_screen(cfg: &CaptureSettings) -> Result<Option<Vec<u8>>, Box<dyn std::error::Error>> {
+    if cfg.capture_backend.eq_ignore_ascii_case("dxgi") {
+        match try_capture_screen_dxgi(cfg) {
+            Err(e) => tracing::warn!(error = %e, "DXGI capture failed, falling back to GDI"),
+            Ok(v) => return Ok(v),
+        }
+    }
+    try_capture_screen_gdi(cfg)
+}
+
+fn try_capture_screen_dxgi(cfg: &CaptureSettings) -> Result<Option<Vec<u8>>, Box<dyn std::error::Error>> {
+    let frame = crate::dxgi::capture_frame(!cfg.capture_all_monitors)?;
+    let Some(f) = frame else { return Ok(None) };
+    // Some display drivers (VMs, secure desktops) succeed the acquire but
+    // hand back a uniform frame; analyzing black frames forever would be
+    // silent data poison, so treat uniform as failure and let GDI take over.
+    if crate::dxgi::is_uniform(&f.pixels) {
+        tracing::warn!("DXGI frame is uniform (unsupported adapter?); falling back to GDI");
+        return Err("DXGI: uniform frame".into());
+    }
+    tracing::debug!(width = f.width, height = f.height, "DXGI frame captured");
+    encode_frame(&f.pixels, f.width, f.height).map(Some)
+}
+
+fn try_capture_screen_gdi(cfg: &CaptureSettings) -> Result<Option<Vec<u8>>, Box<dyn std::error::Error>> {
     unsafe {
         // C# Screen.PrimaryScreen.Bounds — primary display, origin (0,0).
         // CaptureAllMonitors: the virtual screen bounds every monitor, so one
@@ -145,13 +171,18 @@ fn try_capture_screen(cfg: &CaptureSettings) -> Result<Option<Vec<u8>>, Box<dyn 
             return Err(std::io::Error::last_os_error().into());
         }
 
-        let rgb = bgra_to_rgb(&pixels);
-        let mut out: Vec<u8> = Vec::new();
-        // jpeg-encoder defaults to 4:2:0 chroma below quality 90, same as GDI+
-        let encoder = jpeg_encoder::Encoder::new(&mut out, JPEG_QUALITY);
-        encoder.encode(&rgb, w as u16, h as u16, jpeg_encoder::ColorType::Rgb)?;
-        Ok(Some(out))
+        encode_frame(&pixels, w, h).map(Some)
     }
+}
+
+/// Shared BGRA -> JPEG q75 encoder for both capture backends.
+fn encode_frame(bgra: &[u8], w: i32, h: i32) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    let rgb = bgra_to_rgb(bgra);
+    let mut out: Vec<u8> = Vec::new();
+    // jpeg-encoder defaults to 4:2:0 chroma below quality 90, same as GDI+
+    let encoder = jpeg_encoder::Encoder::new(&mut out, JPEG_QUALITY);
+    encoder.encode(&rgb, w as u16, h as u16, jpeg_encoder::ColorType::Rgb)?;
+    Ok(out)
 }
 
 /// BGRA (little-endian u32) -> RGB8 triplets, alpha dropped — matches the
@@ -189,6 +220,28 @@ mod tests {
     fn bgra_conversion() {
         // BGRA bytes: blue=0x11, green=0x22, red=0x33, alpha=0xFF
         assert_eq!(bgra_to_rgb(&[0x11, 0x22, 0x33, 0xFF]), vec![0x33, 0x22, 0x11]);
+    }
+
+    #[test]
+    fn live_dxgi_capture_produces_jpeg_or_falls_back() {
+        // "dxgi" must always yield a frame: either the duplication path or the
+        // automatic GDI fallback (RDP / 8bpp sessions cannot duplicate).
+        let base = CaptureSettings::default();
+        let primary = capture_screen(&base).expect("capture should succeed on a desktop session");
+        assert_eq!(&primary[0..2], &[0xFF, 0xD8], "SOI marker");
+        let primary_img = image::load_from_memory(&primary).expect("decode");
+        let primary_dims = (primary_img.width(), primary_img.height());
+
+        let dxgi_all = CaptureSettings {
+            capture_backend: "dxgi".into(),
+            capture_all_monitors: true,
+            ..Default::default()
+        };
+        let frame = capture_screen(&dxgi_all).expect("dxgi capture (or fallback) should produce a frame");
+        let all_img = image::load_from_memory(&frame).expect("decode");
+        let dims = (all_img.width(), all_img.height());
+        assert!(dims.0 >= primary_dims.0 && dims.1 >= primary_dims.1,
+            "dxgi frame {dims:?} smaller than primary {primary_dims:?}");
     }
 
     #[tokio::test]

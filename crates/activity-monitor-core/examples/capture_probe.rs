@@ -3,10 +3,20 @@
 
 fn main() {
     let out = std::env::args().nth(1).unwrap_or_else(|| "cap-rs.jpg".to_string());
-    let cfg = activity_monitor_core::config::CaptureSettings::default();
+    let backend = std::env::args().nth(2).unwrap_or_else(|| "gdi".to_string());
+    let cfg = activity_monitor_core::config::CaptureSettings {
+        capture_backend: backend.clone(),
+        capture_all_monitors: true,
+        ..Default::default()
+    };
     let frame = activity_monitor_core::capture::capture_screen(&cfg).expect("capture failed");
     std::fs::write(&out, &frame).unwrap();
     // decode to report dimensions
     let img = image::load_from_memory(&frame).expect("decode");
-    println!("CAPTURE file={out} bytes={} width={} height={}", frame.len(), img.width(), img.height());
+    println!(
+        "CAPTURE backend={backend} file={out} bytes={} width={} height={}",
+        frame.len(),
+        img.width(),
+        img.height()
+    );
 }

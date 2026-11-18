@@ -154,13 +154,18 @@ substrate.
   and MCP Server Card (`.well-known`) metadata to follow
 - **Service install on real machines** — elevated `install-service.ps1` run
   and a documented Scheduled-Task fallback for non-admin users
+- **DXGI Desktop Duplication capture backend** — shipped, opt-in via
+  `CaptureBackend: "dxgi"` (default `"gdi"`). Verified live on the dev box:
+  real desktop content, 1920×1080 whole-screen JPEG. Two real findings baked
+  in: the D3D device needs `D3D11_CREATE_DEVICE_BGRA_SUPPORT` (some drivers
+  — including VM adapters — otherwise deliver blank frames), and a
+  uniform-frame guard falls back to GDI so blank frames never reach
+  inference. Known limits: dirty-rectangle skipping not implemented yet
+  (still one full frame per capture); one duplicating process per output;
+  interfaces are recreated per capture, so a stale-interface case
+  degrades to the GDI fallback instead of failing.
 
 ### Next — the following 1–3 months
-- **DXGI Desktop Duplication capture backend (optional)** — GPU path, also
-  silent (no picker/border; only WGC shows those); dirty rectangles mean we
-  only re-infer when the screen changed. GDI stays the permanent fallback.
-  Known limits: one duplicating process per output (max 4 concurrent),
-  interfaces must be recreated on display/desktop changes.
 - **Semantic search in the same SQLite file** — sqlite-vec + FTS5 hybrid
   retrieval with local embeddings; ship as a *degradable* derived index
   (keyword search keeps working if the extension fails). Powers MCP

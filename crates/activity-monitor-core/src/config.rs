@@ -56,6 +56,11 @@ pub struct CaptureSettings {
     // true captures the whole virtual screen (all monitors) in one frame.
     #[serde(default = "d_false")]
     pub capture_all_monitors: bool,
+    /// "gdi" (default, C# behavior) or "dxgi" — DXGI Desktop Duplication:
+    /// also silent (no picker/border), GPU-copied, dirty rectangles. Any
+    /// DXGI failure falls back to GDI for that capture.
+    #[serde(default = "d_backend")]
+    pub capture_backend: String,
 }
 
 impl Default for CaptureSettings {
@@ -155,6 +160,10 @@ fn d_periodic_capture_interval() -> i64 { 180 }
 fn d_min_event_capture_interval() -> i64 { 10 }
 fn d_true() -> bool { true }
 fn d_false() -> bool { false }
+
+fn d_backend() -> String {
+    "gdi".to_string()
+}
 fn d_ollama_endpoint() -> String { "http://localhost:11434".into() }
 fn d_ollama_model() -> String { "qwen3-vl:2b".into() }
 fn d_max_concurrent() -> i64 { 4 }
