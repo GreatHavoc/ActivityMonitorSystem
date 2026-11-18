@@ -248,7 +248,7 @@ re-indexes. Full notes: brain inbox note `market-research-activity-monitor-v13`.
 
 ---
 
-## macOS expansion plan (drafted 2026-11-18)
+## macOS expansion plan (drafted 2026-11-18; M0 + M1 + launchd installer + macOS CI shipped as v1.4.0 on 2026-11-19, M2 and M3 stay Later)
 
 Grounding research (2026-11-18), fact-checked against Apple docs, crate
 docs and 2026 bug reports: macOS cannot capture the screen silently.
@@ -280,46 +280,63 @@ screenshots), which keeps the "no raw screen images stored" wedge. Full
 screen capture via ScreenCaptureKit stays opt-in for users who grant Screen
 Recording and accept the visible indicator.
 
-### Phase M0 — scaffold (Now)
-- Introduce a `platform` trait in core (`capture_frame`, `current_focus`,
-  `idle_state`) with the Windows implementation moved behind `cfg(windows)`
-  and macOS stubs returning clear errors. Zero behavior change on Windows.
-- cfg branch for DB path resolution: `~/Library/Application Support/
-  ActivityMonitor/Data/ActivityData.db`. Config still loads from next to the
-  executable.
-- CI: add a `macos-15` (arm64) job that builds the workspace and runs the
-  test suite.
+### Phase M0 — scaffold (Done in v1.4.0)
+- Implemented as a cfg-split rather than a platform trait (less code): `sensors.rs`
+  is cross-platform (Windows Win32 kept, macOS in `core/src/mac.rs`), `queue.rs`
+  is portable with a per-OS capture step, and `lib.rs` gates `capture`/`dxgi` to
+  Windows. Zero behavior change on Windows (74/74 workspace tests green).
+- DB path resolution via `default_data_dir()`: macOS resolves a relative
+  `DatabasePath` against `~/Library/Application Support/ActivityMonitor`
+  (launchd starts agents with CWD=/), so the DB is
+  `~/Library/Application Support/ActivityMonitor/Data/ActivityData.db`.
+  Config still loads from next to the executable.
+- CI: `macos-15` (arm64) job runs the workspace tests + release build, ad-hoc
+  signs the binaries, and packages the `publish2-macos` release artifact.
+  It is the compile source of truth for cfg(macos) code (cannot be
+  cross-compiled locally; rusqlite bundled needs a target cc).
 
-### Phase M1 — macOS sensors + text backend (Next)
-- Idle via IOKit event-source timestamps (no permission needed).
-- Focus via NSWorkspace frontmost app plus AX window title (Accessibility
-  permission, with a first-run onboarding that opens the System Settings
-  privacy pane).
-- `axtext` backend: feed app/title/AX text through the existing text-only
-  chat path, so events and inference rows flow end to end without any
-  screen image.
+### Phase M1 — macOS sensors + text backend (Done in v1.4.0)
+- Idle via CoreGraphics `CGEventSourceSecondsSinceLastEventType` (no
+  permission needed; the plan's IOKit route was unnecessary).
+- Focus via the `axuielement` crate's system-wide element: focused
+  application (pid + name via `proc_pidpath`) plus the AX window title.
+  Needs the Accessibility permission; the service log and install script
+  say exactly where to grant it (no System Settings pane is auto-opened).
+- `axtext` backend: `core/src/mac.rs::focus_text()` gathers app/title/focused
+  element text, and `ollama.rs::analyze_text` posts it through the same
+  `/api/chat` structured path (text-adapted prompt, no images), so events
+  and inference rows flow end to end without any screen image. Works with
+  both `ollama` and `openai` API styles.
 
-### Phase M2 — screen backend + installer (Next)
+### Phase M2 — screen backend (Later)
 - ScreenCaptureKit backend, opt-in via `CaptureBackend: "screen"`, with a
   permission preflight (`CGPreflightScreenCaptureAccess`) and the mandatory
   recording indicator plus the macOS 15+ periodic re-prompt documented up
   front. `axtext` stays the default.
-- launchd LaunchAgent plus `install-macos.sh` replacing `install-service.ps1`;
-  the Ollama bootstrap flow is identical to Windows.
+- Done early from this phase: launchd LaunchAgent plus `install-macos.sh`
+  (replaces `install-service.ps1` on macOS). The Ollama bootstrap on macOS
+  is probe-only, not identical to Windows: the service never downloads or
+  starts anything on a Mac, it logs `brew install ollama` / `ollama serve` /
+  `ollama pull <model>` and keeps monitoring without inference.
 
 ### Phase M3 — distribution (Later; gated on the Apple Developer account)
-- Every macOS release binary is at least ad-hoc signed in CI (unsigned
-  binaries cannot pass the Screen Recording preflight on Sequoia+), then
-  Developer ID signed and notarized once the paid account exists, published
-  as a separate asset on the release page next to `publish2`.
-- README macOS install section. Homebrew tap only after notarization works.
+- Done early from this phase: every macOS release binary is ad-hoc signed in
+  CI (`codesign --force --sign -`; unsigned binaries cannot pass the Screen
+  Recording preflight on Sequoia+), and the release page carries the macOS zip
+  (`publish2-macos-v1.4.0.zip`) next to the Windows `publish2` zip plus
+  SHA256SUMS. README macOS section shipped.
+- Remaining: Developer ID signing + notarization once the paid Apple
+  Developer account exists (ad-hoc signatures hash per build, so TCC grants
+  do not carry across releases). Homebrew tap only after notarization works.
 
 ---
 
 ## Note on the GitHub release pages
 
-Releases exist on `rust-release`: v1.0.0, v1.1.0 (2026-11-17), v1.2.0
-(2026-11-18). Each page
+Releases exist on `rust-release`: v1.0.0, v1.1.0 (2026-11-17), v1.2.0,
+v1.3.0, v1.4.0 (2026-11-19). Each page
 carries only the `publish2/` zip (service + CLI + MCP + `appsettings.json`
-+ `install-service.ps1`) — never the legacy .NET `publish/`. Release body =
-`RELEASE_NOTES.md`. `main` stays the .NET original.
++ `install-service.ps1`) — never the legacy .NET `publish/` — plus
+`SHA256SUMS.txt`, and from v1.4.0 also the `publish2-macos-*.zip` (3 binaries
++ `appsettings.json` + `install-macos.sh`, ad-hoc signed on the macos-15 CI
+runner). Release body = `RELEASE_NOTES.md`. `main` stays the .NET original.

@@ -2,11 +2,13 @@
   <img src="assets/banner.png" alt="Activity Monitor" width="720">
 </p>
 
-# Activity Monitor — Windows Application (Rust port)
+# Activity Monitor — Windows + macOS (Rust port)
 
-Lightweight Windows app that monitors user activity through window focus
-tracking, idle detection, and triggered screen capture with AI-powered
-activity analysis via a local Ollama vision model (Qwen3-VL).
+Lightweight desktop app that monitors user activity through window focus
+tracking, idle detection, and triggered capture with AI-powered activity
+analysis via a local Ollama model (Qwen3-VL). On Windows the capture is a
+screen frame; on macOS it is text only (accessibility text of the frontmost
+app, no screenshots), because macOS never allows silent screen capture.
 
 This is the Rust port of the original .NET app. The SQLite database is
 byte-compatible with the .NET build, so both read and write the same
@@ -17,8 +19,11 @@ build deploys to `publish2/`.
 ## Features
 
 - **Activity Tracking**: foreground window + idle detection via Win32 APIs
+  (Windows) or CoreGraphics + Accessibility (macOS, v1.4)
 - **Smart Screen Capture**: GDI `BitBlt` of the virtual screen, JPEG q75,
-  low-FPS burst on triggers
+  low-FPS burst on triggers (Windows). On macOS the default `axtext`
+  backend sends frontmost app + window title + accessibility text instead,
+  and no screenshot is ever taken
 - **AI Analysis**: Qwen3-VL via Ollama `/api/chat` with structured output
 - **Queue System**: priority-based processing with backpressure
 - **Event Storage**: SQLite timeline (`ActivityEvents` + `InferenceResults`)
@@ -45,6 +50,10 @@ build deploys to `publish2/`.
   never installs/starts/pulls anything — it only probes the endpoint and logs
   the fix if the server or model is missing. LM Studio and Windows ML's
   WinMLServer work the same way.
+- **macOS 13+ (Apple Silicon or Intel, v1.4)**: download `publish2-macos-v1.4.0.zip`
+  from the release page, see "macOS" below. The release binaries are ad-hoc
+  signed; Developer ID signing and notarization come later (they need a paid
+  Apple Developer account).
 - **Rust toolchain** only if building from source
 
 ## Installation (from source)
@@ -55,6 +64,31 @@ powershell -File deploy.ps1       REM copies exes + appsettings.json to publish2
 ```
 
 Or just use the prebuilt `publish2\` folder.
+
+## macOS (v1.4)
+
+1. Download `publish2-macos-v1.4.0.zip` from the release page and unzip it.
+2. Run `./install-macos.sh` from the unzipped folder. It copies the three
+   binaries + `appsettings.json` to `~/Library/Application Support/ActivityMonitor`
+   and registers a per-user launchd agent (`com.greathavoc.activitymonitor`),
+   so the service starts at login and restarts if it crashes.
+   `./install-macos.sh uninstall` stops and removes the agent.
+3. Inference needs Ollama, which the service will not install for you on a
+   Mac: `brew install ollama`, then `ollama serve` in a terminal and
+   `ollama pull qwen3-vl:2b` (or set `OllamaApiStyle: "openai"` for another
+   local runtime). If Ollama is down, monitoring continues and the log says
+   what to run.
+4. Grant the agent the Accessibility permission: System Settings > Privacy &
+   Security > Accessibility, add `activity-monitor-service`. Without it the
+   service records idle events only. Screen Recording is not needed: the
+   `axtext` backend never captures the screen.
+
+Data locations on macOS: the database is
+`~/Library/Application Support/ActivityMonitor/Data/ActivityData.db` (the CLI
+and MCP server resolve it the same way as on Windows), logs go to
+`~/Library/Logs/ActivityMonitor` and `<install dir>/Logs`. CLI and MCP usage
+is identical to Windows, e.g.
+`~/Library/Application Support/ActivityMonitor/activity-monitor-cli stats`.
 
 ## MCP server (agent access to your day)
 
@@ -94,9 +128,12 @@ HTTP to 127.0.0.1 only.
 - **Everything is local.** Captured frames, the database, and the AI model all
   stay on this machine. There is no cloud endpoint, no telemetry, and no
   account — nothing in this app can send your screen anywhere.
-- **Capture is invisible to you while running** (no consent picker, no capture
-  border, no notification) by design — GDI `BitBlt`, never Windows Graphics
-  Capture. That makes this a *single-user self-monitoring* tool. Using it to
+- **Capture is invisible to you while running on Windows** (no consent picker,
+  no capture border, no notification) by design — GDI `BitBlt`, never Windows
+  Graphics Capture. On macOS (v1.4) no screen image is captured at all: the
+  `axtext` backend reads only the frontmost app, window title and accessibility
+  text, because macOS shows a mandatory recording indicator for any screen
+  capture. That makes this a *single-user self-monitoring* tool. Using it to
   monitor employees or other people is not what it is for, and workplace
   surveillance laws (EU AI Act, California AB 1331, 2026) require informed
   consent, no covert recording, and data minimization.
@@ -128,7 +165,9 @@ HTTP to 127.0.0.1 only.
 
 To run as a real Windows service instead: `activity-monitor-service.exe --service`
 (installed via `install-service.ps1` — run it elevated — or `sc create`),
-or run it in a console with Ctrl+C to stop.
+or run it in a console with Ctrl+C to stop. On macOS the launchd agent
+installed by `install-macos.sh` is the autostart; `launchctl stop/start
+com.greathavoc.activitymonitor` controls it.
 
 ## Configuration
 
@@ -174,7 +213,9 @@ display; the code default is `false`, matching the C# behavior. `CaptureBackend`
 selects the capture path: `"gdi"` (default, the C# behavior) or `"dxgi"`
 (Desktop Duplication — also silent, GPU-copied; any failure, including a
 uniform/blank frame from an unsupported adapter, falls back to GDI for that
-capture). `ExcludedProcesses` lists process names that are never recorded
+capture). On macOS (v1.4) `"axtext"` selects the text-only Accessibility
+backend (the default there; any other value logs a warning and uses axtext),
+and on Windows an unrecognized value falls back to GDI. `ExcludedProcesses` lists process names that are never recorded
 (for example `["OneNote", "game.exe"]`); an empty list records everything.
 Logs go to `<exe_dir>\Logs\`.
 
@@ -219,6 +260,10 @@ cargo build --release --workspace
 - No inference rows — `curl http://localhost:11434/api/tags` must list
   `qwen3-vl:2b`; connection errors fail fast (120 s timeout) and are logged.
 - Corrupt DB — stop the service, delete `Data\ActivityData.db`, restart.
+- macOS: only idle rows are recorded — the agent lacks the Accessibility
+  permission (System Settings > Privacy & Security > Accessibility). No
+  inference rows — Ollama is not running (`ollama serve`) or the model is not
+  pulled (`ollama pull qwen3-vl:2b`); the service log prints the exact fix.
 
 ## License
 
