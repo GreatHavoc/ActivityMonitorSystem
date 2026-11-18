@@ -1,8 +1,7 @@
 //! Phase 6 gate probe: capture one frame, write it to disk, print size.
 //! Run: cargo run -p activity-monitor-core --example capture_probe -- <out.jpg>
-//! Windows only (screen capture); compiles to an empty main elsewhere.
-#![cfg(windows)]
-
+//! Windows only (screen capture); the fallback main keeps it compiling on macOS.
+#[cfg(windows)]
 fn main() {
     let out = std::env::args().nth(1).unwrap_or_else(|| "cap-rs.jpg".to_string());
     let backend = std::env::args().nth(2).unwrap_or_else(|| "gdi".to_string());
@@ -21,4 +20,9 @@ fn main() {
         img.width(),
         img.height()
     );
+}
+
+#[cfg(not(windows))]
+fn main() {
+    eprintln!("capture_probe is Windows-only (screen capture)");
 }
