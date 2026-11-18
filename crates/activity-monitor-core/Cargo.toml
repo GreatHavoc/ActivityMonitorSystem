@@ -8,7 +8,6 @@ license.workspace = true
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 jiff = { version = "0.2.43", features = ["serde"] }
-jiff-tzdb = "0.1"
 rusqlite = { version = "0.40.2", features = ["bundled"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["fmt"] }

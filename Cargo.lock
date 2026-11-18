@@ -28,7 +28,6 @@ dependencies = [
  "base64 0.22.1",
  "image",
  "jiff",
- "jiff-tzdb",
  "jpeg-encoder",
  "reqwest",
  "rusqlite",

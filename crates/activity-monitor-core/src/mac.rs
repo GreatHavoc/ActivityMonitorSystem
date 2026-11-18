@@ -18,12 +18,12 @@ const K_CG_EVENT_SOURCE_STATE_HID_SYSTEM_STATE: u32 = 1;
 const K_CG_ANY_INPUT_EVENT_TYPE: u32 = u32::MAX;
 
 #[link(name = "CoreGraphics", kind = "framework")]
-extern "C" {
+unsafe extern "C" {
     fn CGEventSourceSecondsSinceLastEventType(state: u32, event_type: u32) -> f64;
 }
 
 #[link(name = "System", kind = "dylib")]
-extern "C" {
+unsafe extern "C" {
     fn proc_pidpath(pid: i32, buffer: *mut core::ffi::c_char, buffersize: u32) -> i32;
 }
 
