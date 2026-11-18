@@ -246,6 +246,61 @@ re-indexes. Full notes: brain inbox note `market-research-activity-monitor-v13`.
 
 ---
 
+## macOS expansion plan (drafted 2026-11-18)
+
+Grounding research (2026-11-18): macOS cannot capture the screen silently.
+Screen Recording is a TCC permission and any active capture shows the
+menu-bar recording indicator, so the Windows stealth posture cannot be
+replicated there; the privacy story on macOS has to be consent-first. The
+port itself is cheap: only `capture.rs`, `dxgi.rs` and `sensors.rs` in core
+are `cfg(windows)`, plus one locale call in the CLI, so db/rank/ollama/queue
+and the whole MCP server are already portable Rust. The bindings macOS needs
+exist: `screencapturekit` (ScreenCaptureKit, macOS 12.3+), `axuielement` for
+the Accessibility API, IOKit for idle detection. Ollama now runs on MLX on
+Apple Silicon (since March 2026), so the default inference path works
+unchanged. Distribution outside the App Store requires a Developer ID
+signature plus notarization (paid Apple Developer account); that is the one
+hard external dependency.
+
+Product decision: on macOS the default capture backend is text-only
+(frontmost app, window title and accessibility text sent to the model, no
+screenshots), which keeps the "no raw screen images stored" wedge. Full
+screen capture via ScreenCaptureKit stays opt-in for users who grant Screen
+Recording and accept the visible indicator.
+
+### Phase M0 — scaffold (Now)
+- Introduce a `platform` trait in core (`capture_frame`, `current_focus`,
+  `idle_state`) with the Windows implementation moved behind `cfg(windows)`
+  and macOS stubs returning clear errors. Zero behavior change on Windows.
+- cfg branch for DB path resolution: `~/Library/Application Support/
+  ActivityMonitor/Data/ActivityData.db`. Config still loads from next to the
+  executable.
+- CI: add a `macos-15` (arm64) job that builds the workspace and runs the
+  test suite.
+
+### Phase M1 — macOS sensors + text backend (Next)
+- Idle via IOKit event-source timestamps (no permission needed).
+- Focus via NSWorkspace frontmost app plus AX window title (Accessibility
+  permission, with a first-run onboarding that opens the System Settings
+  privacy pane).
+- `axtext` backend: feed app/title/AX text through the existing text-only
+  chat path, so events and inference rows flow end to end without any
+  screen image.
+
+### Phase M2 — screen backend + installer (Next)
+- ScreenCaptureKit backend, opt-in via `CaptureBackend: "screen"`, with a
+  permission preflight (`CGPreflightScreenCaptureAccess`) and the recording
+  indicator documented up front.
+- launchd LaunchAgent plus `install-macos.sh` replacing `install-service.ps1`;
+  the Ollama bootstrap flow is identical to Windows.
+
+### Phase M3 — distribution (Later; gated on the Apple Developer account)
+- Signed and notarized zip/dmg built on the macOS CI runner, published as a
+  separate asset on the release page next to `publish2`.
+- README macOS install section. Homebrew tap only after notarization works.
+
+---
+
 ## Note on the GitHub release pages
 
 Releases exist on `rust-release`: v1.0.0, v1.1.0 (2026-11-17), v1.2.0
