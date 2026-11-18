@@ -130,7 +130,7 @@ the original .NET version.
 
 ---
 
-## v1.2 roadmap — market-informed (drafted 2026-11-17)
+## v1.2 roadmap — market-informed (drafted 2026-11-17, **released as v1.2.0 on 2026-11-18**)
 
 Evidence base: MCP is the settled agent-to-tool standard (47k+ servers,
 ~500M SDK downloads/month; we already implement spec 2026-07-28 and dual-era
