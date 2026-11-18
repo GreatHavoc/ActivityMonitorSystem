@@ -2,39 +2,11 @@
 
 ## v1.2.0 (2026-11-18)
 
-- **Hybrid `search_activity` in the MCP server** — the sixth tool now merges a
-  lexical leg (FTS5 bm25 over the AI-written app/topic/summary/visible-text,
-  kept in sync by triggers inside the same SQLite file; LIKE fallback on
-  databases the .NET app created) with a trigram-fuzzy leg (typo- and
-  shared-vocabulary-tolerant), RRF-merged, each hit tagged
-  `matchType: keyword|fuzzy|both`. Design decision after research: **no ML
-  runtime** — fastembed/ONNX Runtime cannot link on current MSVC toolchains
-  (LNK2019 `__imp__waccess`…; its load-dynamic mode needs an externally
-  sourced `onnxruntime.dll`), sqlite-vec is pre-v1, and Ollama embeddings
-  would contend with the vision model for the GPU. Zero new dependencies, no
-  download, works on every machine. FTS absence degrades to LIKE + trigram.
-- **DXGI Desktop Duplication capture backend** — opt-in via
-  `CaptureBackend: "dxgi"` (default `"gdi"`, unchanged). Silent GPU capture,
-  verified live (real 1920×1080 content). Baked-in findings:
-  `D3D11_CREATE_DEVICE_BGRA_SUPPORT` is required (VM/other adapters otherwise
-  deliver blank frames), and a uniform-frame guard falls back to GDI so blank
-  frames never reach inference. Known limit: no dirty-rectangle skipping yet
-  (one full frame per capture).
-- **OpenAI-compatible inference runtime** — `OllamaApiStyle: "openai"` speaks
-  `/v1/chat/completions` (images as `data:image/jpeg;base64` URLs, top-level
-  `max_tokens: 8192`) and checks health via `GET /v1/models`. Covers Foundry
-  Local (`http://127.0.0.1:5273/v1`; vision aliases such as
-  `phi-4-multimodal-instruct` use the NPU on Copilot+ PCs), LM Studio and
-  Windows ML's WinMLServer. With this style the day-zero bootstrap never
-  installs/starts/pulls anything — it probes and logs the manual fix
-  (`foundry service start`, `foundry model run <alias>`). Default stays
-  `"ollama"`, so existing installs are unaffected. MCP `ask_about_my_day`
-  works against either runtime unchanged.
-- **Privacy & consent posture documented** in the README: local-only data,
-  why capture is invisible (GDI BitBlt — no consent picker, no border, no
-  notification), retention/purge controls.
-- Tests: workspace 69/69 green, including mock-server round trips for both
-  API styles and the hybrid search legs. CI green on `rust-release`.
+- `search_activity`, the MCP server's sixth tool, now runs hybrid search. One leg is FTS5 bm25 over the AI-written app, topic, summary and visible text, kept in sync by triggers inside the same SQLite file, with a LIKE fallback on databases the .NET app created. The other is trigram fuzzy matching, which tolerates typos and paraphrases. Results are RRF-merged and each hit is tagged `matchType: keyword|fuzzy|both`. We looked at embeddings and decided against an ML runtime: fastembed/ONNX Runtime does not link on current MSVC toolchains (LNK2019 on the CRT imports), sqlite-vec is still pre-1.0, and Ollama embeddings would compete with the vision model for the GPU. No new dependencies, nothing to download, works on any machine. If FTS is missing, search degrades to LIKE plus trigram.
+- DXGI Desktop Duplication is available as a capture backend via `CaptureBackend: "dxgi"`. The default stays `"gdi"`. It captures silently on the GPU and was verified live with real 1920×1080 content. Two findings are built in: the D3D device needs `D3D11_CREATE_DEVICE_BGRA_SUPPORT` (some adapters, including VMs, otherwise produce blank frames), and a uniform-frame guard falls back to GDI so a blank frame never reaches inference. Dirty-rectangle skipping is not in yet, so each capture is still one full frame.
+- The inference runtime is no longer Ollama-only. `OllamaApiStyle: "openai"` speaks `/v1/chat/completions` (images as `data:image/jpeg;base64` URLs, top-level `max_tokens: 8192`) and checks health via `GET /v1/models`. That covers Foundry Local (`http://127.0.0.1:5273/v1`; aliases such as `phi-4-multimodal-instruct` run on the NPU on Copilot+ PCs), LM Studio, and Windows ML's WinMLServer. With this style the first-run bootstrap installs nothing: it probes and logs the manual fix (`foundry service start`, `foundry model run <alias>`). The default stays `"ollama"`, and `ask_about_my_day` works against either runtime.
+- The README now documents the privacy and consent posture: data stays local, capture is invisible (GDI BitBlt, so no consent picker, no border, no notification), and the retention and purge controls are described.
+- Workspace tests are 69/69 green, including mock-server round trips for both API styles and both search legs. CI is green on `rust-release`.
 
 ## v1.1.0 (2026-11-17)
 
