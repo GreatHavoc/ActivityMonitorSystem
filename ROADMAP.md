@@ -248,11 +248,21 @@ re-indexes. Full notes: brain inbox note `market-research-activity-monitor-v13`.
 
 ## macOS expansion plan (drafted 2026-11-18)
 
-Grounding research (2026-11-18): macOS cannot capture the screen silently.
-Screen Recording is a TCC permission and any active capture shows the
+Grounding research (2026-11-18), fact-checked against Apple docs, crate
+docs and 2026 bug reports: macOS cannot capture the screen silently.
+Screen Recording is a TCC permission and any active capture shows a
 menu-bar recording indicator, so the Windows stealth posture cannot be
-replicated there; the privacy story on macOS has to be consent-first. The
-port itself is cheap: only `capture.rs`, `dxgi.rs` and `sensors.rs` in core
+replicated there; the privacy story on macOS has to be consent-first. Two
+sharper constraints from the fact-check: the indicator for a third-party
+ScreenCaptureKit stream is mandatory and unsuppressible (the only exemption
+is external displays), and on macOS 15+ using ScreenCaptureKit without the
+system picker triggers periodic TCC re-authorization prompts, while the
+picker itself needs a user click on every launch, so a background service
+cannot use it. Also, unsigned binaries get `CGPreflightScreenCaptureAccess
+== false` on Sequoia+, so release binaries must be at least ad-hoc signed
+(`codesign --force --sign -`), and only a stable Developer ID signature
+keeps TCC grants across releases because ad-hoc signatures hash per build.
+The port itself is cheap: only `capture.rs`, `dxgi.rs` and `sensors.rs` in core
 are `cfg(windows)`, plus one locale call in the CLI, so db/rank/ollama/queue
 and the whole MCP server are already portable Rust. The bindings macOS needs
 exist: `screencapturekit` (ScreenCaptureKit, macOS 12.3+), `axuielement` for
@@ -289,14 +299,17 @@ Recording and accept the visible indicator.
 
 ### Phase M2 — screen backend + installer (Next)
 - ScreenCaptureKit backend, opt-in via `CaptureBackend: "screen"`, with a
-  permission preflight (`CGPreflightScreenCaptureAccess`) and the recording
-  indicator documented up front.
+  permission preflight (`CGPreflightScreenCaptureAccess`) and the mandatory
+  recording indicator plus the macOS 15+ periodic re-prompt documented up
+  front. `axtext` stays the default.
 - launchd LaunchAgent plus `install-macos.sh` replacing `install-service.ps1`;
   the Ollama bootstrap flow is identical to Windows.
 
 ### Phase M3 — distribution (Later; gated on the Apple Developer account)
-- Signed and notarized zip/dmg built on the macOS CI runner, published as a
-  separate asset on the release page next to `publish2`.
+- Every macOS release binary is at least ad-hoc signed in CI (unsigned
+  binaries cannot pass the Screen Recording preflight on Sequoia+), then
+  Developer ID signed and notarized once the paid account exists, published
+  as a separate asset on the release page next to `publish2`.
 - README macOS install section. Homebrew tap only after notarization works.
 
 ---
