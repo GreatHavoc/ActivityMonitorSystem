@@ -545,16 +545,38 @@ impl ActivityDatabase {
     }
 }
 
+/// Per-user/per-machine application data directory.
+/// Windows: %ProgramData%\ActivityMonitor (Program.cs GetDatabasePath).
+/// macOS (v1.4): ~/Library/Application Support/ActivityMonitor.
+pub fn default_data_dir() -> PathBuf {
+    #[cfg(target_os = "macos")]
+    {
+        std::env::var_os("HOME")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from("."))
+            .join("Library")
+            .join("Application Support")
+            .join("ActivityMonitor")
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        std::env::var_os("ProgramData")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from(r"C:\ProgramData"))
+            .join("ActivityMonitor")
+    }
+}
+
 /// CLI database resolution, same order as Program.cs GetDatabasePath():
-/// ./Data/ActivityData.db, then %ProgramData%\ActivityMonitor\Data\ActivityData.db.
+/// ./Data/ActivityData.db, then the platform data dir's Data/ActivityData.db
+/// (Windows: %ProgramData%\ActivityMonitor\Data; macOS: ~/Library/Application
+/// Support/ActivityMonitor/Data).
 pub fn resolve_cli_db_path() -> Option<PathBuf> {
     let local = std::env::current_dir().ok()?.join("Data").join("ActivityData.db");
     if local.exists() {
         return Some(local);
     }
-    let program_data =
-        std::env::var_os("ProgramData").map(PathBuf::from).unwrap_or_else(|| PathBuf::from(r"C:\ProgramData"));
-    let pd = program_data.join("ActivityMonitor").join("Data").join("ActivityData.db");
+    let pd = default_data_dir().join("Data").join("ActivityData.db");
     pd.exists().then_some(pd)
 }
 

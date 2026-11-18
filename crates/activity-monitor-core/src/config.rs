@@ -65,6 +65,10 @@ pub struct CaptureSettings {
     /// "gdi" (default, C# behavior) or "dxgi" — DXGI Desktop Duplication:
     /// also silent (no picker/border), GPU-copied, dirty rectangles. Any
     /// DXGI failure falls back to GDI for that capture.
+    /// v1.4 macOS: "axtext" — text-only capture via the Accessibility API
+    /// (macOS has no silent screen capture). On Windows an unrecognized value
+    /// warns and uses GDI; on macOS any non-"axtext" value warns and uses
+    /// axtext.
     #[serde(default = "d_backend")]
     pub capture_backend: String,
     /// v1.3: process names (with or without ".exe", case-insensitive) that are

@@ -4,14 +4,14 @@ pub mod capture;
 pub mod digest;
 #[cfg(windows)]
 pub mod dxgi;
+#[cfg(target_os = "macos")]
+pub mod mac;
 pub mod rank;
 pub mod db;
 pub mod logging;
 pub mod models;
 pub mod ollama;
-#[cfg(windows)]
 pub mod queue;
-#[cfg(windows)]
 pub mod sensors;
 pub mod timefmt;
 

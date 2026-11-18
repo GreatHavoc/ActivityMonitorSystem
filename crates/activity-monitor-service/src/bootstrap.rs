@@ -8,19 +8,29 @@
 //! The database is created by the caller (ActivityDatabase::open + initialize).
 //! Any failure logs an actionable error and the service keeps monitoring
 //! without inference rather than exiting.
-//! Env override: ACTIVITY_MONITOR_OLLAMA_EXE points at a specific ollama.exe.
+//! Env override: ACTIVITY_MONITOR_OLLAMA_EXE points at a specific ollama.exe
+//! (Windows auto-install path only).
+//! v1.4 macOS: probe-only, like the OpenAI style — we do not download or
+//! start anything on the user's Mac; the log tells them what to run.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
+#[cfg(windows)]
+use std::path::Path;
+#[cfg(windows)]
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
+#[cfg(windows)]
 use std::time::Duration;
 
 use activity_monitor_core::config::ActivityMonitorSettings;
 use activity_monitor_core::ollama::OllamaClient;
 
+#[cfg(windows)]
 const OLLAMA_ZIP_URL: &str =
     "https://github.com/ollama/ollama/releases/latest/download/ollama-windows-amd64.zip";
+#[cfg(windows)]
 const SERVE_POLL: Duration = Duration::from_secs(3);
+#[cfg(windows)]
 const SERVE_POLLS: u32 = 30; // ~90 s
 
 pub async fn ensure_ollama(settings: &ActivityMonitorSettings, cancel: &AtomicBool) {
@@ -50,6 +60,34 @@ pub async fn ensure_ollama(settings: &ActivityMonitorSettings, cancel: &AtomicBo
         }
         return;
     }
+    // v1.4 macOS: probe-only. No auto-download / no `ollama serve` spawn on a
+    // user's Mac; log the actionable command instead (same pattern as the
+    // OpenAI-compatible branch above).
+    #[cfg(target_os = "macos")]
+    {
+        if !client.server_up(cancel).await {
+            tracing::error!(
+                endpoint = %settings.ollama_endpoint,
+                "Ollama not reachable; monitoring continues without inference. \
+                 Manual fix: brew install ollama, then `ollama serve` in another terminal \
+                 (or set OllamaApiStyle to \"openai\" for another local runtime)"
+            );
+            return;
+        }
+        if client.check_health(cancel).await {
+            tracing::info!(model = %settings.ollama_model, endpoint = %settings.ollama_endpoint, "Ollama ready");
+        } else {
+            tracing::error!(
+                model = %settings.ollama_model,
+                "Ollama is up but the model is not pulled; monitoring continues without inference. \
+                 Manual fix: ollama pull {}",
+                settings.ollama_model
+            );
+        }
+        return;
+    }
+    #[cfg(windows)]
+    {
     if client.check_health(cancel).await {
         tracing::info!(model = %settings.ollama_model, "Ollama ready");
         return;
@@ -90,14 +128,17 @@ pub async fn ensure_ollama(settings: &ActivityMonitorSettings, cancel: &AtomicBo
     } else {
         tracing::error!(model = %settings.ollama_model, "Pull finished but model not listed; check `ollama list`");
     }
+    }
 }
 
+#[cfg(windows)]
 fn install_dir() -> PathBuf {
     std::env::var_os("LOCALAPPDATA")
         .map(|d| PathBuf::from(d).join(r"Programs\Ollama"))
         .unwrap_or_else(|| PathBuf::from(r"C:\Program Files\Ollama"))
 }
 
+#[cfg(windows)]
 fn find_ollama() -> Option<PathBuf> {
     if let Some(e) = std::env::var_os("ACTIVITY_MONITOR_OLLAMA_EXE") {
         let p = PathBuf::from(e);
@@ -115,6 +156,7 @@ fn find_ollama() -> Option<PathBuf> {
     candidates.into_iter().find(|c| c.is_file()).or_else(|| find_recursive(&install_dir(), 3))
 }
 
+#[cfg(windows)]
 fn find_recursive(dir: &Path, depth: u32) -> Option<PathBuf> {
     if depth == 0 || !dir.is_dir() {
         return None;
@@ -134,6 +176,7 @@ fn find_recursive(dir: &Path, depth: u32) -> Option<PathBuf> {
     None
 }
 
+#[cfg(windows)]
 fn install_ollama() -> Option<PathBuf> {
     let tmp = std::env::temp_dir().join("ollama-install");
     std::fs::create_dir_all(&tmp).ok()?;
@@ -175,6 +218,7 @@ fn install_ollama() -> Option<PathBuf> {
     found
 }
 
+#[cfg(windows)]
 fn start_serve(exe: &Path) {
     let dir = exe.parent().unwrap_or_else(|| Path::new("."));
     match Command::new(exe)
@@ -190,6 +234,7 @@ fn start_serve(exe: &Path) {
     }
 }
 
+#[cfg(windows)]
 fn pull_model(exe: &Path, model: &str) {
     tracing::info!(model, "Pulling model (first run downloads ~2 GB)");
     let dir = exe.parent().unwrap_or_else(|| Path::new("."));

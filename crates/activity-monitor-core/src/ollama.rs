@@ -16,6 +16,10 @@ use crate::models::InferenceResult;
 
 const PROMPT: &str = "Analyze this screenshot. Identify the application, what the user is doing, and the topic. Keep all fields concise. For visible_text, include only the window title and 1-2 key lines, nothing more.";
 
+/// v1.4 axtext backend (macOS default): the prompt when there is no screenshot,
+/// only the accessibility text of the frontmost app.
+const PROMPT_TEXT: &str = "Analyze the accessibility text of the user's frontmost application (there is no screenshot). Identify the application, what the user is doing, and the topic. Keep all fields concise. For visible_text, include only the window title and 1-2 key lines, nothing more.";
+
 pub struct OllamaClient {
     http: reqwest::Client,
     endpoint: String,
@@ -98,6 +102,41 @@ impl OllamaClient {
             ApiStyle::Ollama => chat_request_body(&self.model, images),
             ApiStyle::OpenAi => openai_vision_request_body(&self.model, images),
         };
+        self.post_chat(body, cancel).await
+    }
+
+    /// v1.4 axtext backend: analyze the AX focus text instead of frames.
+    /// Same return contract as analyze_frames (None on any failure).
+    pub async fn analyze_text(&self, context: &str, cancel: &AtomicBool) -> Option<InferenceResult> {
+        match self.try_analyze_text(context, cancel).await {
+            Ok(v) => v,
+            Err(e) => {
+                tracing::error!(error = %e, "Error during text inference");
+                None
+            }
+        }
+    }
+
+    async fn try_analyze_text(
+        &self,
+        context: &str,
+        cancel: &AtomicBool,
+    ) -> Result<Option<InferenceResult>, Box<dyn std::error::Error>> {
+        tracing::info!(api = ?self.api_style, context_chars = context.chars().count(), "Sending focus text to inference server");
+        let body = match self.api_style {
+            ApiStyle::Ollama => text_request_body(&self.model, context),
+            ApiStyle::OpenAi => openai_text_context_body(&self.model, context),
+        };
+        self.post_chat(body, cancel).await
+    }
+
+    /// POST one chat body, then extract + parse the assistant content. Shared
+    /// by the vision and text paths (and any future caller).
+    async fn post_chat(
+        &self,
+        body: Value,
+        cancel: &AtomicBool,
+    ) -> Result<Option<InferenceResult>, Box<dyn std::error::Error>> {
         let url = self.chat_url();
         let fut = async {
             let resp = self
@@ -354,6 +393,34 @@ pub fn openai_vision_request_body(model: &str, images: Vec<String>) -> Value {
     json!({
         "model": model,
         "messages": [{ "role": "user", "content": content }],
+        "stream": false,
+        "temperature": 0.1,
+        "top_p": 0.9,
+        "max_tokens": 8192
+    })
+}
+
+/// Ollama-style text-only analyze body (v1.4 axtext backend on macOS). Same
+/// structured format and num_predict headroom as chat_request_body, no images.
+pub fn text_request_body(model: &str, context: &str) -> Value {
+    json!({
+        "model": model,
+        "messages": [{ "role": "user", "content": format!("{PROMPT_TEXT}\n\n{context}") }],
+        "stream": false,
+        "think": false,
+        "format": structured_format(),
+        "options": { "temperature": 0.1, "top_p": 0.9, "num_predict": 8192 }
+    })
+}
+
+/// OpenAI-compatible text-only analyze body. Same shortcut as the vision body:
+/// no response_format, parse_response degrades gracefully on non-JSON content.
+pub fn openai_text_context_body(model: &str, context: &str) -> Value {
+    json!({
+        "model": model,
+        "messages": [{ "role": "user", "content": [
+            { "type": "text", "text": format!("{PROMPT_TEXT}\n\n{context}") }
+        ] }],
         "stream": false,
         "temperature": 0.1,
         "top_p": 0.9,
@@ -664,6 +731,49 @@ mod tests {
         let client = OllamaClient::new(&test_settings(&ep));
         assert!(client.analyze_frames(&[vec![9u8]], &AtomicBool::new(false)).await.is_none());
         h.await.unwrap();
+    }
+
+    #[test]
+    fn text_body_shapes() {
+        let body = text_request_body("m", "ctx");
+        assert_eq!(body["model"], "m");
+        assert_eq!(body["stream"], false);
+        assert!(body["messages"][0]["content"].as_str().unwrap().contains("ctx"));
+        assert!(body["messages"][0]["content"].as_str().unwrap().contains("no screenshot"));
+        assert!(body.get("images").is_none(), "text path sends no images");
+        assert_eq!(body["options"]["num_predict"], 8192);
+        assert_eq!(body["format"]["type"], "object");
+
+        let oai = openai_text_context_body("m", "ctx");
+        assert_eq!(oai["max_tokens"], 8192);
+        assert!(oai.get("options").is_none());
+        assert!(oai.get("format").is_none());
+        let content = oai["messages"][0]["content"].as_array().unwrap();
+        assert_eq!(content.len(), 1);
+        assert!(content[0]["text"].as_str().unwrap().contains("ctx"));
+    }
+
+    #[tokio::test]
+    async fn analyze_text_round_trip() {
+        let inner = r#"{"activity_label":"Editing docs","application":"TextEdit","content_type":"document","topic":"readme","action":"editing","summary":"Editing the readme.","visible_text":"README","confidence":0.8}"#;
+        let resp: &'static str = Box::leak(
+            json!({"message": {"role": "assistant", "content": inner}, "done": true})
+                .to_string()
+                .into_boxed_str(),
+        );
+        let (ep, h) = one_shot(200, resp).await;
+        let client = OllamaClient::new(&test_settings(&ep));
+        let r = client
+            .analyze_text("Application: TextEdit\nWindow title: README", &AtomicBool::new(false))
+            .await
+            .expect("result");
+        assert_eq!(r.activity_label, "Editing docs");
+        assert_eq!(r.application, "TextEdit");
+        let req = h.await.unwrap();
+        let line = req.lines().next().unwrap_or("");
+        assert!(line.starts_with("POST /api/chat HTTP/1.1"), "request line: {line}");
+        let sent: Value = serde_json::from_str(request_body(&req)).unwrap();
+        assert_eq!(sent, text_request_body("test-model", "Application: TextEdit\nWindow title: README"));
     }
 
     #[tokio::test]

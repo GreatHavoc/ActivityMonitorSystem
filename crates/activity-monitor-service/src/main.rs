@@ -2,8 +2,10 @@
 //! (Program.cs + ActivityMonitorService.ExecuteAsync). Console mode by default,
 //! `--service` runs under the Windows service dispatcher (same CLI as C#).
 //! Fix: logs go to <exe_dir>/Logs instead of the hardcoded
-//! C:\ActivityMonitor\publish\Logs; the DB path is resolved against the CWD,
-//! as in C# Path.GetFullPath(Storage.DatabasePath).
+//! C:\ActivityMonitor\publish\Logs; the DB path is resolved against the CWD
+//! on Windows (as in C# Path.GetFullPath(Storage.DatabasePath)) and against
+//! ~/Library/Application Support/ActivityMonitor on macOS, where launchd
+//! starts the process with CWD=/.
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -76,10 +78,7 @@ async fn console_main() -> i32 {
 async fn run_loop(settings: &ActivityMonitorSettings, cancel: Arc<AtomicBool>) -> i32 {
     tracing::info!("Activity Monitor Service starting...");
 
-    // C# Path.GetFullPath(Storage.DatabasePath): relative paths resolve against CWD.
-    let db_path = std::env::current_dir()
-        .unwrap_or_else(|_| PathBuf::from("."))
-        .join(&settings.storage.database_path);
+    let db_path = resolve_db_path(&settings.storage.database_path);
     let db = match ActivityDatabase::open(&db_path).and_then(|d| d.initialize().map(|_| d)) {
         Ok(d) => d,
         Err(e) => {
@@ -290,6 +289,27 @@ fn trigger_capture(
 async fn wait_cancel(cancel: &AtomicBool) {
     while !cancel.load(Ordering::Relaxed) {
         tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+}
+
+/// C# Path.GetFullPath(Storage.DatabasePath): relative paths resolve against CWD.
+#[cfg(not(target_os = "macos"))]
+fn resolve_db_path(rel: &str) -> PathBuf {
+    std::env::current_dir()
+        .unwrap_or_else(|_| PathBuf::from("."))
+        .join(rel)
+}
+
+/// macOS: launchd runs the agent with CWD=/, so a relative DatabasePath would
+/// land in /Data. Resolve against the per-user app support dir instead; the
+/// shipped Windows-style "Data\\ActivityData.db" separator is normalized.
+#[cfg(target_os = "macos")]
+fn resolve_db_path(rel: &str) -> PathBuf {
+    let p = PathBuf::from(rel.replace('\\', "/"));
+    if p.is_absolute() {
+        p
+    } else {
+        activity_monitor_core::db::default_data_dir().join(p)
     }
 }
 

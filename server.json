@@ -3,7 +3,7 @@
   "name": "io.github.greathavoc/activity-monitor",
   "title": "Activity Monitor",
   "description": "Read-only MCP access to the local Activity Monitor database: activity timeline, day summaries, hybrid search over AI-written summaries, weekly digest, and a local-LLM 'ask about my day' tool. All data stays on the user's machine; the server opens the SQLite file read-only.",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "license": "MIT",
   "repository": {
     "url": "https://github.com/GreatHavoc/ActivityMonitorSystem",
@@ -19,7 +19,7 @@
     "io.modelcontextprotocol.registry/official": {
       "status": "active",
       "publishedAt": "2026-11-18T00:00:00Z",
-      "updatedAt": "2026-11-18T00:00:00Z"
+      "updatedAt": "2026-11-19T00:00:00Z"
     }
   }
 }

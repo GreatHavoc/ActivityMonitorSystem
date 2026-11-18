@@ -16,6 +16,12 @@ tracing-appender = "0.2.5"
 uuid = { version = "1", features = ["v4", "serde"] }
 reqwest = { version = "0.13", features = ["json"] }
 base64 = "0.22"
+# queue.rs is cross-platform since v1.4 (macOS uses the axtext path)
+tokio = { version = "1", features = ["rt", "sync", "time", "macros"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+# Accessibility API (focus + text-only capture context) on macOS, v1.4
+axuielement = "0.10"
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.62", features = [
@@ -41,7 +47,6 @@ jpeg-encoder = "0.7" # q<90 defaults to 4:2:0 chroma like GDI+; image crate is 4
 # fastembed/ort cannot link on current MSVC (LNK2019 __imp__waccess...), its
 # load-dynamic path needs an externally-sourced onnxruntime.dll, and a
 # local-first product should not depend on a C++ runtime it cannot build.
-tokio = { version = "1", features = ["rt", "sync", "time", "macros"] }
 
 [dev-dependencies]
 image = "0.25.10" # probe decode only

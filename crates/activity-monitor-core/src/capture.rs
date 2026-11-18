@@ -99,6 +99,9 @@ fn try_capture_screen(cfg: &CaptureSettings) -> Result<Option<Vec<u8>>, Box<dyn 
             Err(e) => tracing::warn!(error = %e, "DXGI capture failed, falling back to GDI"),
             Ok(v) => return Ok(v),
         }
+    } else if !cfg.capture_backend.eq_ignore_ascii_case("gdi") {
+        // "axtext" is macOS-only; anything else unknown here -> GDI, as C# would
+        tracing::warn!(backend = %cfg.capture_backend, "Unknown CaptureBackend on Windows, using GDI");
     }
     try_capture_screen_gdi(cfg)
 }

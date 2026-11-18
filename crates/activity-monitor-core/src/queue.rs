@@ -14,10 +14,11 @@ use jiff::{Span, Timestamp};
 use tokio::sync::{mpsc, Semaphore};
 use tokio::task::JoinHandle;
 
+#[cfg(windows)]
 use crate::capture::capture_frames;
 use crate::config::{ActivityMonitorSettings, CaptureSettings};
 use crate::db::ActivityDatabase;
-use crate::models::{InferenceRequest, QueueMetrics, RequestPriority};
+use crate::models::{InferenceRequest, InferenceResult, QueueMetrics, RequestPriority};
 use crate::ollama::{wait_cancel, OllamaClient};
 
 const MAX_PROCESSING_TIME_SAMPLES: usize = 100;
@@ -211,6 +212,43 @@ impl RequestQueueManager {
         tracing::info!("Queue processing stopped");
     }
 
+    /// Capture + inference for one request, split per platform. Windows:
+    /// screen frames -> vision analysis. macOS (v1.4): axtext backend, the AX
+    /// focus text -> text analysis (no screenshot exists on this path).
+    /// Err(()) = capture step failed (no time recorded, as in C#).
+    async fn capture_and_analyze(&self) -> Result<Option<InferenceResult>, ()> {
+        #[cfg(windows)]
+        {
+            let frames = match capture_frames(&self.capture_cfg, &self.cancel).await {
+                Some(f) if !f.is_empty() => f,
+                _ => {
+                    tracing::warn!("No frames captured");
+                    return Err(());
+                }
+            };
+            return Ok(self.ollama.analyze_frames(&frames, &self.cancel).await);
+        }
+        #[cfg(target_os = "macos")]
+        {
+            if !self.capture_cfg.capture_backend.eq_ignore_ascii_case("axtext") {
+                tracing::warn!(
+                    backend = %self.capture_cfg.capture_backend,
+                    "macOS cannot capture silently (Screen Recording TCC + mandatory menu-bar \
+                     indicator); using the axtext backend (Accessibility text only, no screenshots)"
+                );
+            }
+            let Some(text) = crate::mac::focus_text() else {
+                tracing::warn!("No accessibility focus text captured");
+                return Err(());
+            };
+            return Ok(self.ollama.analyze_text(&text, &self.cancel).await);
+        }
+        #[cfg(not(any(windows, target_os = "macos")))]
+        {
+            Err(())
+        }
+    }
+
     /// Port of ProcessRequestAsync. C# timing semantics: processing time is
     /// recorded on success and on a null inference result, but not on
     /// no-frames / db-error / cancellation.
@@ -218,15 +256,9 @@ impl RequestQueueManager {
         let start = Instant::now();
         tracing::info!(request_id = %request.id, reason = %request.trigger_reason, "Processing request");
         let outcome: Result<bool, ()> = async {
-            let frames = match capture_frames(&self.capture_cfg, &self.cancel).await {
-                Some(f) if !f.is_empty() => f,
-                _ => {
-                    tracing::warn!(request_id = %request.id, "No frames captured");
-                    return Err(()); // no time recorded, as in C#
-                }
-            };
-            match self.ollama.analyze_frames(&frames, &self.cancel).await {
-                Some(mut result) => {
+            match self.capture_and_analyze().await {
+                Err(()) => return Err(()), // capture failed: failed count, no time, as in C#
+                Ok(Some(mut result)) => {
                     result.request_id = request.id; // queue assigns the id, as in C#
                     let db = self.db.lock().unwrap();
                     match db.save_inference_result(&result) {
@@ -245,7 +277,7 @@ impl RequestQueueManager {
                         }
                     }
                 }
-                None => {
+                Ok(None) => {
                     if self.cancel.load(Ordering::Relaxed) {
                         tracing::warn!(request_id = %request.id, "Request was cancelled");
                         return Err(()); // cancellation: failed, no time, as in C#
@@ -336,6 +368,7 @@ mod tests {
     }
 
     /// Serve exactly one HTTP request (the /api/chat call).
+    #[cfg(windows)] // the end-to-end test below drives a real screen capture
     async fn one_chat_server(content: &'static str) -> (String, tokio::task::JoinHandle<()>) {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
@@ -371,6 +404,7 @@ mod tests {
         (format!("http://{addr}"), h)
     }
 
+    #[cfg(windows)] // drives capture_frames -> analyze_frames against a mock server
     #[tokio::test(flavor = "current_thread")]
     async fn manager_end_to_end_one_request() {
         let _serial = crate::CAPTURE_TEST_LOCK.lock().unwrap(); // serialize with capture tests

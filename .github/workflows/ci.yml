@@ -44,3 +44,52 @@ jobs:
           # the native exe early and pwsh then reports $LASTEXITCODE = 1.
           & ".\target\release\activity-monitor-cli.exe" --help | Out-Null
           if ($LASTEXITCODE -ne 0) { exit 1 }
+
+  # v1.4 macOS: the same workspace tests + release build on arm64, ad-hoc
+  # codesigned (unsigned binaries fail the Screen Recording preflight on
+  # Sequoia+; Developer ID notarization is a separate paid-account step).
+  # This job is also the compile source of truth for the cfg(macos) code,
+  # which cannot be cross-compiled locally (rusqlite bundled needs cc).
+  test-and-build-macos:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: cargo test --workspace
+        run: cargo test --workspace
+
+      - name: cargo build --release --workspace
+        run: cargo build --release --workspace
+
+      - name: Ad-hoc codesign the release binaries
+        run: |
+          for b in target/release/activity-monitor-service target/release/activity-monitor-cli target/release/activity-monitor-mcp; do
+            codesign --force --sign - "$b"
+          done
+
+      - name: Smoke — MCP server answers server/discover over stdio
+        run: |
+          req='{"jsonrpc":"2.0","id":1,"method":"server/discover","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28"}}}'
+          resp=$(printf '%s' "$req" | ./target/release/activity-monitor-mcp)
+          echo "$resp" | grep -q '"supportedVersions"' || { echo "MCP stdio smoke failed: $resp"; exit 1; }
+          echo "MCP smoke OK"
+
+      - name: Smoke — CLI prints help
+        run: ./target/release/activity-monitor-cli --help > /dev/null
+
+      - name: Package macOS release artifact
+        run: |
+          mkdir -p publish2-macos
+          cp target/release/activity-monitor-service target/release/activity-monitor-cli target/release/activity-monitor-mcp publish2-macos/
+          cp macos/appsettings.json publish2-macos/appsettings.json
+          cp install-macos.sh publish2-macos/
+          chmod +x publish2-macos/install-macos.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: publish2-macos
+          path: publish2-macos
