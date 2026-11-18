@@ -1,4 +1,4 @@
-//! Ollama HTTP client — port of OllamaInferenceClient (`/api/chat` + `/api/tags`).
+﻿//! Ollama HTTP client â€” port of OllamaInferenceClient (`/api/chat` + `/api/tags`).
 //! Deliberate fix: C# sets `HttpClient.Timeout = Timeout.InfiniteTimeSpan`; this
 //! port applies `QueueSettings::effective_timeout()` (120 s when <= 0) instead.
 
@@ -20,6 +20,30 @@ pub struct OllamaClient {
     http: reqwest::Client,
     endpoint: String,
     model: String,
+    api_style: ApiStyle,
+}
+
+/// Wire protocol of the inference endpoint. v1.2 "runtime flexibility":
+/// "openai" covers Foundry Local, Windows ML's WinMLServer and LM Studio,
+/// which all speak OpenAI-compatible /v1/chat/completions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ApiStyle {
+    Ollama,
+    OpenAi,
+}
+
+impl ApiStyle {
+    pub fn parse(s: &str) -> Self {
+        if s.trim().eq_ignore_ascii_case("openai") {
+            ApiStyle::OpenAi
+        } else {
+            ApiStyle::Ollama
+        }
+    }
+
+    pub fn is_openai(&self) -> bool {
+        matches!(self, ApiStyle::OpenAi)
+    }
 }
 
 impl OllamaClient {
@@ -32,6 +56,22 @@ impl OllamaClient {
             http,
             endpoint: settings.ollama_endpoint.trim_end_matches('/').to_string(),
             model: settings.ollama_model.clone(),
+            api_style: ApiStyle::parse(&settings.ollama_api_style),
+        }
+    }
+
+    fn chat_url(&self) -> String {
+        match self.api_style {
+            ApiStyle::Ollama => format!("{}/api/chat", self.endpoint),
+            ApiStyle::OpenAi => format!("{}/chat/completions", self.endpoint),
+        }
+    }
+
+    fn models_url(&self) -> String {
+        match self.api_style {
+            ApiStyle::Ollama => format!("{}/api/tags", self.endpoint),
+            // Foundry Local / any OpenAI-compatible server: GET /v1/models
+            ApiStyle::OpenAi => format!("{}/models", self.endpoint),
         }
     }
 
@@ -52,13 +92,17 @@ impl OllamaClient {
         frames: &[Vec<u8>],
         cancel: &AtomicBool,
     ) -> Result<Option<InferenceResult>, Box<dyn std::error::Error>> {
-        tracing::info!(frame_count = frames.len(), "Sending frames to Ollama for analysis");
+        tracing::info!(frame_count = frames.len(), api = ?self.api_style, "Sending frames to inference server");
         let images = frames_to_base64(frames);
-        let body = chat_request_body(&self.model, images);
+        let body = match self.api_style {
+            ApiStyle::Ollama => chat_request_body(&self.model, images),
+            ApiStyle::OpenAi => openai_vision_request_body(&self.model, images),
+        };
+        let url = self.chat_url();
         let fut = async {
             let resp = self
                 .http
-                .post(format!("{}/api/chat", self.endpoint))
+                .post(&url)
                 .json(&body)
                 .send()
                 .await?;
@@ -68,28 +112,23 @@ impl OllamaClient {
         };
         let (status, raw) = select_cancel(fut, cancel).await?.map_err(Box::new)?;
         if !status.is_success() {
-            tracing::error!("Ollama request failed: {status} - {raw}");
+            tracing::error!("Inference request failed: {status} - {raw}");
             return Ok(None);
         }
-        tracing::info!(raw_body = %raw, "Raw Ollama response body");
-        let chat: Option<ChatResponse> = match serde_json::from_str(&raw) {
-            Ok(v) => v,
-            Err(e) => {
-                tracing::error!(error = %e, raw_body = %raw, "Failed to deserialize Ollama response");
+        tracing::info!(raw_body = %raw, "Raw inference response body");
+        let content = match extract_chat_content(&raw, self.api_style) {
+            Some(c) => c,
+            None => {
+                tracing::error!(raw_body = %raw, "Failed to deserialize inference response");
                 return Ok(None);
             }
         };
-        let content = chat.and_then(|c| c.message).and_then(|m| m.content);
-        match content {
-            Some(c) if !c.is_empty() => {
-                tracing::info!(content = %c, "Ollama response");
-                Ok(Some(parse_response(&c)))
-            }
-            _ => {
-                tracing::warn!("Empty response from Ollama");
-                Ok(None)
-            }
+        if content.is_empty() {
+            tracing::warn!("Empty response from inference server");
+            return Ok(None);
         }
+        tracing::info!(content = %content, "Inference response");
+        Ok(Some(parse_response(&content)))
     }
 
     /// Plain text chat (no images, no structured format) for the MCP server's
@@ -110,23 +149,28 @@ impl OllamaClient {
         user: &str,
         cancel: &AtomicBool,
     ) -> Result<Option<String>, Box<dyn std::error::Error>> {
-        let body = json!({
-            "model": self.model,
-            "messages": [
-                { "role": "system", "content": system },
-                { "role": "user", "content": user }
-            ],
-            "stream": false,
-            "think": false,
-            // num_predict 8192: the qwen3-vl thinking renderer ignores think:false on
-            // Ollama 0.40.x and burns 600-2700 tokens on <think>; 1024 (the C# value)
-            // left zero budget for the answer -> empty content (P4 drill finding).
-            "options": { "temperature": 0.3, "top_p": 0.9, "num_predict": 8192 }
-        });
+        // num_predict 8192 (Ollama) / max_tokens 8192 (OpenAI): the qwen3-vl
+        // thinking renderer ignores think:false on Ollama 0.40.x and burns
+        // 600-2700 tokens on <think>; 1024 (the C# value) left zero budget for
+        // the answer -> empty content (P4 drill finding).
+        let body = match self.api_style {
+            ApiStyle::Ollama => json!({
+                "model": self.model,
+                "messages": [
+                    { "role": "system", "content": system },
+                    { "role": "user", "content": user }
+                ],
+                "stream": false,
+                "think": false,
+                "options": { "temperature": 0.3, "top_p": 0.9, "num_predict": 8192 }
+            }),
+            ApiStyle::OpenAi => openai_text_request_body(&self.model, system, user),
+        };
+        let url = self.chat_url();
         let fut = async {
             let resp = self
                 .http
-                .post(format!("{}/api/chat", self.endpoint))
+                .post(&url)
                 .json(&body)
                 .send()
                 .await?;
@@ -136,14 +180,10 @@ impl OllamaClient {
         };
         let (status, raw) = select_cancel(fut, cancel).await?.map_err(Box::new)?;
         if !status.is_success() {
-            tracing::error!("Ollama chat failed: {status} - {raw}");
+            tracing::error!("Chat request failed: {status} - {raw}");
             return Ok(None);
         }
-        let chat: Option<ChatResponse> = serde_json::from_str(&raw).ok();
-        Ok(chat
-            .and_then(|c| c.message)
-            .and_then(|m| m.content)
-            .filter(|c| !c.is_empty()))
+        Ok(extract_chat_content(&raw, self.api_style).filter(|c| !c.is_empty()))
     }
 
     /// Port of CheckHealthAsync: /api/tags, model name substring match (ordinal ignore case).
@@ -157,40 +197,60 @@ impl OllamaClient {
         }
     }
 
-    /// True when the server answers /api/tags at all (the model may still be
-    /// missing) — used by the service bootstrap to decide whether to start
-    /// `ollama serve` or just `ollama pull`.
+    /// True when the server answers its models endpoint at all (the model may
+    /// still be missing) — used by the service bootstrap to decide whether to
+    /// start `ollama serve` or just `ollama pull`.
     pub async fn server_up(&self, cancel: &AtomicBool) -> bool {
+        let url = self.models_url();
         let fut = async {
-            let resp = self.http.get(format!("{}/api/tags", self.endpoint)).send().await?;
+            let resp = self.http.get(&url).send().await?;
             Ok::<_, reqwest::Error>(resp.status().is_success())
         };
         matches!(select_cancel(fut, cancel).await, Ok(Ok(true)))
     }
 
     async fn try_health(&self, cancel: &AtomicBool) -> Result<bool, Box<dyn std::error::Error>> {
+        let url = self.models_url();
         let fut = async {
-            let resp = self.http.get(format!("{}/api/tags", self.endpoint)).send().await?;
+            let resp = self.http.get(&url).send().await?;
             Ok::<_, reqwest::Error>((resp.status(), resp.text().await?))
         };
         let (status, body) = select_cancel(fut, cancel).await?.map_err(Box::new)?;
         if !status.is_success() {
-            tracing::warn!("Ollama health check failed: {status}");
+            tracing::warn!("Health check failed: {status}");
             return Ok(false);
         }
-        let tags: TagsResponse = match serde_json::from_str(&body) {
-            Ok(t) => t,
-            Err(_) => return Ok(false), // C# ReadFromJsonAsync throws -> catch -> false
-        };
-        // C#: tags?.Models == null -> false (covers "null" body and models: null)
-        let Some(models) = tags.models else { return Ok(false) };
         let needle = self.model.to_lowercase();
-        let found = models.iter().any(|m| m.name.to_lowercase().contains(&needle));
-        if !found {
-            let names: Vec<&str> = models.iter().map(|m| m.name.as_str()).collect();
-            tracing::warn!(model = %self.model, available = %names.join(", "), "Model not found in Ollama");
+        match self.api_style {
+            ApiStyle::Ollama => {
+                let tags: TagsResponse = match serde_json::from_str(&body) {
+                    Ok(t) => t,
+                    Err(_) => return Ok(false), // C# ReadFromJsonAsync throws -> catch -> false
+                };
+                // C#: tags?.Models == null -> false (covers "null" body and models: null)
+                let Some(models) = tags.models else { return Ok(false) };
+                let found = models.iter().any(|m| m.name.to_lowercase().contains(&needle));
+                if !found {
+                    let names: Vec<&str> = models.iter().map(|m| m.name.as_str()).collect();
+                    tracing::warn!(model = %self.model, available = %names.join(", "), "Model not found in Ollama");
+                }
+                Ok(found)
+            }
+            ApiStyle::OpenAi => {
+                // Foundry Local /v1/models: {"data":[{"id":"phi-4-multimodal-instruct",...}]}
+                let list: OpenAiModelsResponse = match serde_json::from_str(&body) {
+                    Ok(t) => t,
+                    Err(_) => return Ok(false),
+                };
+                let Some(models) = list.data else { return Ok(false) };
+                let found = models.iter().any(|m| m.id.to_lowercase().contains(&needle));
+                if !found {
+                    let names: Vec<&str> = models.iter().map(|m| m.id.as_str()).collect();
+                    tracing::warn!(model = %self.model, available = %names.join(", "), "Model not found on the OpenAI-compatible server");
+                }
+                Ok(found)
+            }
         }
-        Ok(found)
     }
 }
 
@@ -214,6 +274,45 @@ struct TagsModel {
     name: String,
 }
 
+/// OpenAI-compatible chat response (Foundry Local, LM Studio, WinMLServer):
+/// choices[0].message.content.
+#[derive(Deserialize)]
+struct OpenAiChatResponse {
+    choices: Option<Vec<OpenAiChoice>>,
+}
+
+#[derive(Deserialize)]
+struct OpenAiChoice {
+    message: Option<ChatMessage>,
+}
+
+#[derive(Deserialize)]
+struct OpenAiModelsResponse {
+    data: Option<Vec<OpenAiModel>>,
+}
+
+#[derive(Deserialize)]
+struct OpenAiModel {
+    id: String,
+}
+
+/// Extract the assistant text from a chat response in either wire format.
+fn extract_chat_content(raw: &str, style: ApiStyle) -> Option<String> {
+    match style {
+        ApiStyle::Ollama => serde_json::from_str::<ChatResponse>(raw)
+            .ok()?
+            .message
+            .and_then(|m| m.content),
+        ApiStyle::OpenAi => serde_json::from_str::<OpenAiChatResponse>(raw)
+            .ok()?
+            .choices?
+            .into_iter()
+            .next()?
+            .message
+            .and_then(|m| m.content),
+    }
+}
+
 /// C# ConvertFramesToBase64: only the middle frame, to stay within token limits.
 fn frames_to_base64(frames: &[Vec<u8>]) -> Vec<String> {
     let mut out = Vec::new();
@@ -234,6 +333,47 @@ pub fn chat_request_body(model: &str, images: Vec<String>) -> Value {
         "format": structured_format(),
         // see chat_text: qwen3-vl thinking needs headroom above the C# 1024
         "options": { "temperature": 0.1, "top_p": 0.9, "num_predict": 8192 }
+    })
+}
+
+/// OpenAI-compatible vision body for POST {endpoint}/chat/completions
+/// (Foundry Local, LM Studio, Windows ML's WinMLServer). Differences from the
+/// Ollama body: images travel as data: URLs inside a content array,
+/// generation params are top-level, and the budget is max_tokens.
+/// shortcut: no `response_format`/`format` here — strict schema enforcement
+/// varies per served model and a 4xx beats a prose fallback; parse_response
+/// already degrades gracefully on non-JSON content.
+pub fn openai_vision_request_body(model: &str, images: Vec<String>) -> Value {
+    let mut content = vec![json!({ "type": "text", "text": PROMPT })];
+    for b in images {
+        content.push(json!({
+            "type": "image_url",
+            "image_url": { "url": format!("data:image/jpeg;base64,{b}") }
+        }));
+    }
+    json!({
+        "model": model,
+        "messages": [{ "role": "user", "content": content }],
+        "stream": false,
+        "temperature": 0.1,
+        "top_p": 0.9,
+        "max_tokens": 8192
+    })
+}
+
+/// OpenAI-compatible plain-text body (MCP ask_about_my_day on a non-Ollama
+/// runtime). max_tokens 8192 for the same headroom reason as chat_request_body.
+pub fn openai_text_request_body(model: &str, system: &str, user: &str) -> Value {
+    json!({
+        "model": model,
+        "messages": [
+            { "role": "system", "content": system },
+            { "role": "user", "content": user }
+        ],
+        "stream": false,
+        "temperature": 0.3,
+        "top_p": 0.9,
+        "max_tokens": 8192
     })
 }
 
@@ -552,6 +692,114 @@ mod tests {
 
         let (ep, h) = one_shot(200, "not json").await;
         let client = OllamaClient::new(&test_settings(&ep));
+        assert!(!client.check_health(&cancel).await);
+        h.await.unwrap();
+    }
+
+    fn test_settings_style(endpoint: &str, style: &str) -> ActivityMonitorSettings {
+        let mut s = test_settings(endpoint);
+        s.ollama_api_style = style.to_string();
+        s
+    }
+
+    #[test]
+    fn api_style_parse() {
+        assert_eq!(ApiStyle::parse("ollama"), ApiStyle::Ollama);
+        assert_eq!(ApiStyle::parse(""), ApiStyle::Ollama);
+        assert_eq!(ApiStyle::parse(" OpenAI "), ApiStyle::OpenAi);
+        assert!(ApiStyle::parse("openai").is_openai());
+        assert!(!ApiStyle::parse("ollama").is_openai());
+    }
+
+    #[test]
+    fn openai_body_shapes() {
+        let vision = openai_vision_request_body("phi-4-multimodal-instruct", vec!["aGk=".to_string()]);
+        assert_eq!(vision["model"], "phi-4-multimodal-instruct");
+        assert_eq!(vision["stream"], false);
+        assert_eq!(vision["max_tokens"], 8192);
+        assert_eq!(vision["temperature"], 0.1);
+        assert!(vision.get("options").is_none(), "no Ollama-only options");
+        assert!(vision.get("format").is_none(), "no strict schema on openai style");
+        let content = vision["messages"][0]["content"].as_array().unwrap();
+        assert_eq!(content[0], json!({"type": "text", "text": PROMPT}));
+        assert_eq!(
+            content[1],
+            json!({"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,aGk="}})
+        );
+
+        let text = openai_text_request_body("m", "sys", "hi");
+        assert_eq!(text["messages"][0]["content"], "sys");
+        assert_eq!(text["messages"][1]["content"], "hi");
+        assert_eq!(text["max_tokens"], 8192);
+        assert!(text["messages"][1]["content"].is_string(), "plain string content, not an array");
+    }
+
+    #[test]
+    fn extract_content_both_styles() {
+        let ollama = r#"{"message":{"role":"assistant","content":"hello"}}"#;
+        assert_eq!(extract_chat_content(ollama, ApiStyle::Ollama).as_deref(), Some("hello"));
+        assert_eq!(extract_chat_content(ollama, ApiStyle::OpenAi), None);
+
+        let openai = r#"{"id":"x","choices":[{"index":0,"message":{"role":"assistant","content":"hi there"},"finish_reason":"stop"}]}"#;
+        assert_eq!(extract_chat_content(openai, ApiStyle::OpenAi).as_deref(), Some("hi there"));
+        assert_eq!(extract_chat_content(openai, ApiStyle::Ollama), None);
+        assert_eq!(extract_chat_content("garbage", ApiStyle::OpenAi), None);
+        assert_eq!(extract_chat_content(r#"{"choices":[]}"#, ApiStyle::OpenAi), None);
+    }
+
+    #[tokio::test]
+    async fn analyze_round_trip_openai_style() {
+        // Foundry Local style: POST /v1/chat/completions, choices[] response
+        let inner = r#"{"activity_label":"Browsing docs","application":"Edge","content_type":"web","topic":"foundry","action":"reading","summary":"Reading Foundry docs.","visible_text":"t","confidence":0.9}"#;
+        let resp: &'static str = Box::leak(
+            json!({
+                "id": "chatcmpl-1",
+                "choices": [{ "index": 0, "message": { "role": "assistant", "content": inner }, "finish_reason": "stop" }],
+                "usage": { "completion_tokens": 40 }
+            })
+            .to_string()
+            .into_boxed_str(),
+        );
+        let (ep, h) = one_shot(200, resp).await;
+        let client = OllamaClient::new(&test_settings_style(&ep, "openai"));
+        let frames = vec![vec![1u8, 2], vec![3u8, 4], vec![5u8, 6]];
+        let r = client.analyze_frames(&frames, &AtomicBool::new(false)).await.expect("result");
+        assert_eq!(r.activity_label, "Browsing docs");
+        assert_eq!(r.confidence, 0.9);
+        let req = h.await.unwrap();
+        let line = req.lines().next().unwrap_or("");
+        assert!(line.starts_with("POST /chat/completions HTTP/1.1"), "request line: {line}");
+        let sent: Value = serde_json::from_str(request_body(&req)).unwrap();
+        let expected = openai_vision_request_body(
+            "test-model",
+            vec![base64::engine::general_purpose::STANDARD.encode([3u8, 4])],
+        );
+        assert_eq!(sent, expected, "request body mismatch");
+    }
+
+    #[tokio::test]
+    async fn health_openai_style() {
+        let cancel = AtomicBool::new(false);
+        // GET /v1/models, model id substring match
+        let (ep, h) = one_shot(200, r#"{"object":"list","data":[{"id":"test-model-vision","object":"model"}]}"#).await;
+        let client = OllamaClient::new(&test_settings_style(&ep, "openai"));
+        assert!(client.server_up(&cancel).await);
+        let req = h.await.unwrap();
+        assert!(req.starts_with("GET /models HTTP/1.1"), "request line: {}", req.lines().next().unwrap_or(""));
+
+        let (ep, h) = one_shot(200, r#"{"object":"list","data":[{"id":"test-model-vision"}]}"#).await;
+        let client = OllamaClient::new(&test_settings_style(&ep, "openai"));
+        assert!(client.check_health(&cancel).await);
+        let req = h.await.unwrap();
+        assert!(req.starts_with("GET /models HTTP/1.1"), "request line: {}", req.lines().next().unwrap_or(""));
+
+        let (ep, h) = one_shot(200, r#"{"data":[{"id":"other-model"}]}"#).await;
+        let client = OllamaClient::new(&test_settings_style(&ep, "openai"));
+        assert!(!client.check_health(&cancel).await);
+        h.await.unwrap();
+
+        let (ep, h) = one_shot(200, r#"{"data":null}"#).await;
+        let client = OllamaClient::new(&test_settings_style(&ep, "openai"));
         assert!(!client.check_health(&cancel).await);
         h.await.unwrap();
     }

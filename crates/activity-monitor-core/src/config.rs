@@ -25,6 +25,12 @@ pub struct ActivityMonitorSettings {
     pub ollama_endpoint: String,
     #[serde(default = "d_ollama_model")]
     pub ollama_model: String,
+    /// "ollama" (default, /api/chat + /api/tags + the day-zero bootstrap) or
+    /// "openai" for any OpenAI-compatible server — Foundry Local
+    /// (http://localhost:5273/v1), Windows ML WinMLServer, LM Studio
+    /// (/v1/chat/completions, images as data: URLs, no bootstrap flow).
+    #[serde(default = "d_ollama_api_style")]
+    pub ollama_api_style: String,
     #[serde(default)]
     pub queue_settings: QueueSettings,
     #[serde(default)]
@@ -163,6 +169,10 @@ fn d_false() -> bool { false }
 
 fn d_backend() -> String {
     "gdi".to_string()
+}
+
+fn d_ollama_api_style() -> String {
+    "ollama".to_string()
 }
 fn d_ollama_endpoint() -> String { "http://localhost:11434".into() }
 fn d_ollama_model() -> String { "qwen3-vl:2b".into() }

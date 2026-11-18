@@ -25,6 +25,31 @@ const SERVE_POLLS: u32 = 30; // ~90 s
 
 pub async fn ensure_ollama(settings: &ActivityMonitorSettings, cancel: &AtomicBool) {
     let client = OllamaClient::new(settings);
+    // v1.2 runtime flexibility: an OpenAI-compatible runtime (Foundry Local,
+    // LM Studio, WinMLServer) is managed by the user, not by us — no install,
+    // no `serve`, no `pull`. Just probe and log actionable hints.
+    if activity_monitor_core::ollama::ApiStyle::parse(&settings.ollama_api_style).is_openai() {
+        if !client.server_up(cancel).await {
+            tracing::error!(
+                endpoint = %settings.ollama_endpoint,
+                "Inference server unreachable; monitoring continues without inference. \
+                 Manual fix: start your runtime (e.g. `foundry service start`, then check the URI \
+                 with `foundry service status`) and point OllamaEndpoint at it, e.g. http://127.0.0.1:5273/v1"
+            );
+            return;
+        }
+        if client.check_health(cancel).await {
+            tracing::info!(model = %settings.ollama_model, endpoint = %settings.ollama_endpoint, "Inference server ready (OpenAI-compatible)");
+        } else {
+            tracing::error!(
+                model = %settings.ollama_model,
+                "Server is up but the model is not listed; monitoring continues without inference. \
+                 Manual fix: `foundry model run {}` (or `foundry model list` to pick an alias)",
+                settings.ollama_model
+            );
+        }
+        return;
+    }
     if client.check_health(cancel).await {
         tracing::info!(model = %settings.ollama_model, "Ollama ready");
         return;

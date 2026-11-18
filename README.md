@@ -36,6 +36,15 @@ build deploys to `publish2/`.
   `qwen3-vl:2b` (startup blocks until the model is ready; ~2 GB download on
   first run). Set `ACTIVITY_MONITOR_OLLAMA_EXE` to use a specific ollama.exe.
   If the download fails the service keeps monitoring and logs the manual fix.
+- **Alternative inference runtime (v1.2)**: set `"OllamaApiStyle": "openai"`,
+  point `OllamaEndpoint` at any OpenAI-compatible server (e.g. Foundry Local's
+  `http://127.0.0.1:5273/v1` — start it with `foundry service start`, list models
+  with `foundry model list`, run one with `foundry model run <alias>`; a vision
+  alias such as `phi-4-multimodal-instruct` on Copilot+ PCs gets NPU inference)
+  and set `OllamaModel` to the served model id. With this style the service
+  never installs/starts/pulls anything — it only probes the endpoint and logs
+  the fix if the server or model is missing. LM Studio and Windows ML's
+  WinMLServer work the same way.
 - **Rust toolchain** only if building from source
 
 ## Installation (from source)
@@ -117,6 +126,7 @@ Edit `publish2\appsettings.json` (loaded from the exe's folder):
     },
     "OllamaEndpoint": "http://localhost:11434",
     "OllamaModel": "qwen3-vl:2b",
+    "OllamaApiStyle": "ollama",
     "QueueSettings": {
       "MaxConcurrentTasks": 4, "MaxQueueSize": 100,
       "HighPriorityThreshold": 10, "ProcessingTimeoutSeconds": 0

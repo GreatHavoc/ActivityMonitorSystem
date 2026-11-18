@@ -171,8 +171,13 @@ substrate.
   degrades to the GDI fallback instead of failing.
 
 ### Next — the following 1–3 months
-- **Runtime flexibility** — swap the Ollama endpoint for Foundry Local /
-  Windows ML (OpenAI-compatible) so Copilot+ PCs get NPU inference.
+- **Runtime flexibility** — shipped: `OllamaApiStyle: "openai"` speaks
+  OpenAI-compatible `/v1/chat/completions` (data-URL images, top-level
+  `max_tokens`), covering Foundry Local (`http://127.0.0.1:5273/v1`, vision
+  aliases like `phi-4-multimodal-instruct` get NPU inference on Copilot+ PCs),
+  LM Studio and Windows ML's WinMLServer. Bootstrap skips install/serve/pull
+  for this style and only probes + logs the manual fix. Health check uses
+  `GET /v1/models`. Default stays `"ollama"` — zero change for existing installs.
 
 ### Later — when there is evidence it's worth it
 - **From recording to advising** — weekly "shape of your work" digest: focus
