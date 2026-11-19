@@ -118,9 +118,9 @@ Example (stdio, one request per line):
 Point your client at it, e.g. Claude Code: `claude mcp add activity-monitor -- path\to\activity-monitor-mcp.exe`.
 
 Provenance for agents: the repo ships `server.json` (MCP server card) and
-every release carries a `SHA256SUMS.txt` asset plus a GitHub attestation, so
-a client can verify the binary before connecting. All tools are read-only
-(`readOnlyHint: true`); the server opens the database read-only and binds
+every release carries a `SHA256SUMS.txt` asset, so a client can verify the
+download before connecting. GitHub attestations are not published yet.
+All tools are read-only (`readOnlyHint: true`); the server opens the database read-only and binds
 HTTP to 127.0.0.1 only.
 
 ## Privacy & consent

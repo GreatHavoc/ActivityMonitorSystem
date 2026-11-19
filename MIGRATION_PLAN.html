@@ -73,7 +73,7 @@
 
 <h1>Activity Monitor — Rust Migration Plan</h1>
 <div class="sub">Product audit, library selection and migration workplan</div>
-<div class="meta">Document maintained through the migration &nbsp;·&nbsp; last updated 2026-11-19 &nbsp;·&nbsp; v1.0.0 + v1.1.0 + v1.2.0 + v1.3.0 + <b>v1.4.0 released 2026-11-19 (macOS support)</b></div>
+<div class="meta">Document maintained through the migration &nbsp;·&nbsp; last updated 2026-11-20 &nbsp;·&nbsp; v1.0.0 to v1.4.0 released &nbsp;·&nbsp; <b>v1.5 planned, no code written</b></div>
 
 <h2>1. Live status</h2>
 <div class="sticky">
@@ -106,6 +106,20 @@
     <li class="done"><span class="tag t-done">Done</span><b>v1.3.0 released (2026-11-18), planned the same day from a market scan plus a usage audit.</b> Market: MCP registry at 47k servers with a live supply-chain crisis (provenance decides connection), EU AI Act high-risk duties in force since 2026-08-02, local-first PKM trend. Audit: 1 download per release and no telemetry by design, so decisions rested on local evidence (soak: 335 raw events vs 5 AI summaries in 30 min; old DBs lack FTS, so the LIKE+fuzzy fallback serves most real installs). Shipped: data ownership bundle (<code>cli export</code> md/json, compaction now purges inference rows with their events, <code>ExcludedProcesses</code> gate in the service loop), weekly digest as Markdown on both surfaces (<code>report --week</code> and the 7th MCP tool <code>weekly_digest</code>, shared renderer in <code>core/src/digest.rs</code>), trust bundle (<code>server.json</code> card, SHA256SUMS asset, release attestation), README compliance note. Workspace 72/72 green before tagging. Remaining Next items (NPU text path, DXGI dirty-rects, CI search quality gate, registry submission) stay in <code>ROADMAP.md</code>.</li>
     <li class="done"><span class="tag t-done">Done</span><b>v1.4.0 released 2026-11-19: macOS support (M0 + M1 + launchd installer + macOS CI).</b> Research held: screen capture on macOS cannot be silent (TCC Screen Recording plus the mandatory menu-bar indicator), so macOS ships consent-first with the <code>axtext</code> backend: <code>core/src/mac.rs</code> reads idle from CoreGraphics (<code>CGEventSourceSecondsSinceLastEventType</code>) and focus + context text from the Accessibility API (<code>axuielement</code>), and <code>ollama.rs::analyze_text</code> posts that text through the same <code>/api/chat</code> structured path, no screenshots ever. <code>sensors.rs</code>/<code>queue.rs</code> are now cross-platform (per-OS cfg branches); DB resolves to <code>~/Library/Application Support/ActivityMonitor</code> on macOS. <code>install-macos.sh</code> installs a per-user launchd agent; Ollama bootstrap on macOS is probe-only (<code>brew install ollama</code> hint). CI gained a <code>macos-15</code> job (tests + release build + ad-hoc <code>codesign</code> + <code>publish2-macos</code> artifact), which is the compile source of truth for cfg(macos). Release page carries <code>publish2-v1.4.0.zip</code> + <code>publish2-macos-v1.4.0.zip</code> + <code>SHA256SUMS.txt</code>. Workspace 74/74 green on Windows; both CI jobs green on the release commit. Still Later: ScreenCaptureKit <code>screen</code> backend and Developer ID notarization (paid Apple Developer account), see <code>ROADMAP.md</code>.</li>
   </ul>
+</div>
+
+<h2>Next: v1.5 control panel (planned 2026-11-20)</h2>
+<div class="sticky plain">
+  <p>Scope: trust and platform follow-through from v1.4. ScreenCaptureKit, notarization, cloud sync and keystroke logging stay out. Full evidence and acceptance criteria in <code>ROADMAP.md</code>.</p>
+  <table>
+    <tr><th>Workstream</th><th>Status</th><th>Blocker</th><th>Next action</th></tr>
+    <tr><td>V1.5.0 toolchain and supply chain</td><td>Planned, first</td><td>None</td><td>Set Cargo publish-age cooldown and unused-dep lint; pin CI tools (README claim already corrected)</td></tr>
+    <tr><td>V1.5.1 Jiff 1.0 upgrade</td><td>Planned</td><td>Breaking changes to review</td><td>Bump four manifests; verify "O" timestamps, ICU sort and both CI jobs</td></tr>
+    <tr><td>V1.5.2 MCP registry</td><td>Planned</td><td>GitHub device login; package or public HTTPS route</td><td>Fix schema, description and remote; validate with pinned publisher</td></tr>
+    <tr><td>V1.5.3 macOS 27.3 permissions</td><td>Planned</td><td>No Mac with 27.3 here</td><td>Update install script, log hints and README for the new permission flow</td></tr>
+    <tr><td>V1.5.4 model refresh</td><td>Experiment</td><td>No local eval yet</td><td>Measure parse rate, quality and latency before changing the default model</td></tr>
+  </table>
+  <p>Sources: This Week in Rust 677 and 678, Rust 1.100 notes, Jiff 1.0 announcement, MCP registry quickstart, Apple Developer News 2026-11-16, Ollama MLX post. All links in <code>ROADMAP.md</code>.</p>
 </div>
 
 <h2>2. Scope — what the system does today</h2>
