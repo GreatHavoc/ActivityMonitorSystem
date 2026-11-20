@@ -1,4 +1,4 @@
-[package]
+﻿[package]
 name = "activity-monitor-service"
 version = "0.1.0"
 edition.workspace = true
@@ -17,3 +17,6 @@ windows-service = "0.8.1"
 [dev-dependencies]
 serde_json = "1"
 tokio = { version = "1", features = ["rt", "macros", "time", "net", "io-util"] }
+
+[lints]
+workspace = true

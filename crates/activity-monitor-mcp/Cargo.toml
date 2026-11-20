@@ -1,4 +1,4 @@
-[package]
+﻿[package]
 name = "activity-monitor-mcp"
 version = "0.1.0"
 edition.workspace = true
@@ -15,3 +15,6 @@ tracing-subscriber = { version = "0.3", features = ["fmt"] }
 
 [dev-dependencies]
 rusqlite = { version = "0.40.2", features = ["bundled"] }
+
+[lints]
+workspace = true

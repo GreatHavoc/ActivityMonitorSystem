@@ -10,3 +10,7 @@ members = [
 [workspace.package]
 edition = "2024"
 license = "MIT"
+
+# Cargo 1.100 lint: report crate dependencies a target never uses.
+[workspace.lints.cargo]
+unused_dependencies = "warn"

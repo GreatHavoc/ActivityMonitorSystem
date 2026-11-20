@@ -2,3 +2,9 @@
 # (the .NET publish needed the .NET 8 runtime installed; the Rust build must not).
 [target.x86_64-pc-windows-msvc]
 rustflags = ["-C", "target-feature=+crt-static"]
+
+# Rust 1.100 dependency cooldown: the resolver skips crate versions published
+# less than 3 days ago (versions already in Cargo.lock are kept). Urgent fix:
+# CARGO_RESOLVER_INCOMPATIBLE_PUBLISH_AGE=allow cargo update -p <crate>
+[registry]
+global-min-publish-age = "3 days"

@@ -73,7 +73,7 @@
 
 <h1>Activity Monitor — Rust Migration Plan</h1>
 <div class="sub">Product audit, library selection and migration workplan</div>
-<div class="meta">Document maintained through the migration &nbsp;·&nbsp; last updated 2026-11-20 &nbsp;·&nbsp; v1.0.0 to v1.4.0 released &nbsp;·&nbsp; <b>v1.5 in progress: AX timeout, jiff 0.2.46, server.json fix, sqlite export done</b></div>
+<div class="meta">Document maintained through the migration &nbsp;·&nbsp; last updated 2026-11-20 &nbsp;·&nbsp; v1.0.0 to v1.4.0 released &nbsp;·&nbsp; <b>v1.5 in progress: V1.5.0/5/6 + jiff 0.2.46 + server.json done; model eval, jiff 1.0, registry publish, macOS 27.3 pending</b></div>
 
 <h2>1. Live status</h2>
 <div class="sticky">
@@ -113,7 +113,7 @@
   <p>Scope: trust and platform follow-through from v1.4. ScreenCaptureKit, notarization, cloud sync and keystroke logging stay out. Full evidence and acceptance criteria in <code>ROADMAP.md</code>.</p>
   <table>
     <tr><th>Workstream</th><th>Status</th><th>Blocker</th><th>Next action</th></tr>
-    <tr><td>V1.5.0 toolchain and supply chain</td><td>Planned, first</td><td>None</td><td>Set Cargo publish-age cooldown and unused-dep lint; pin CI tools (README claim already corrected)</td></tr>
+    <tr><td>V1.5.0 toolchain and supply chain</td><td>Done 2026-11-20</td><td>None</td><td><code>global-min-publish-age = "3 days"</code> verified via dry-run; <code>unused_dependencies</code> cargo lint on all crates; no CI downloads to pin</td></tr>
     <tr><td>V1.5.1 Jiff 1.0 upgrade</td><td>Planned</td><td>Breaking changes to review</td><td>Bump four manifests; verify "O" timestamps, ICU sort and both CI jobs</td></tr>
     <tr><td>V1.5.2 MCP registry</td><td>Planned</td><td>GitHub device login; package or public HTTPS route</td><td>Fix schema, description and remote; validate with pinned publisher</td></tr>
     <tr><td>V1.5.3 macOS 27.3 permissions</td><td>Planned</td><td>No Mac with 27.3 here</td><td>Update install script, log hints and README for the new permission flow</td></tr>

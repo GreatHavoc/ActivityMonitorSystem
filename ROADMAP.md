@@ -333,7 +333,7 @@ Recording and accept the visible indicator.
 
 ## v1.5 plan (drafted 2026-11-20 from tech newsletter and changelog research)
 
-Status: in progress (started 2026-11-20). No v1.5 release exists yet. Scope is trust and platform follow-through from v1.4. ScreenCaptureKit (M2), notarization (M3), cloud sync and keystroke logging stay out. Done so far: jiff 0.2.46 bump, server.json schema/description fix, V1.5.5, V1.5.6.
+Status: in progress (started 2026-11-20). No v1.5 release exists yet. Scope is trust and platform follow-through from v1.4. ScreenCaptureKit (M2), notarization (M3), cloud sync and keystroke logging stay out. Done so far: V1.5.0, V1.5.5, V1.5.6, jiff 0.2.46 bump, server.json schema/description fix.
 
 Sources checked on 2026-11-20:
 - This Week in Rust 677 (2026-11-11) and 678 (2026-11-18): https://this-week-in-rust.org/blog/2026/11/18/this-week-in-rust-678/
@@ -343,9 +343,12 @@ Sources checked on 2026-11-20:
 - Apple Developer News (2026-11-16), permission changes in macOS 27.3: https://developer.apple.com/news/?id=oqng0zjk
 - Ollama MLX engine post (2026-06-11), speed and NVFP4 results: https://ollama.com/blog/mlx-performance
 
-### V1.5.0 Toolchain and supply chain (first, smallest)
-Rust 1.100 adds Cargo dependency cooldowns (`global-min-publish-age = "3 days"`) and reports unused dependencies. v1.4 CI exposed both problems: an unused `jiff-tzdb` dep and a local disk full of build artifacts. Set the cooldown in `.cargo/config.toml` and add the `[lints.cargo]` unused-dependency lint to the workspace. Pin any CLI that CI downloads to a fixed version tag; TWIR 677 carried an issue about an unpinned `mcp-publisher` with `id-token: write`. Correct the README line that says releases carry a GitHub attestation: v1.3 and v1.4 notes list attestation as a follow-up, so the shipped assets are zips plus SHA256SUMS.
-Acceptance: both CI jobs green, an intentionally unused dep is reported, README matches the actual release assets, no new crate dependency.
+### V1.5.0 Toolchain and supply chain (done 2026-11-20)
+- Done: `[registry] global-min-publish-age = "3 days"` in `.cargo/config.toml`. Verified with `cargo update --dry-run`: "Locking ... as of 3 days ago", and clap 4.6.9 (published 4 hours before the run) is held back. Urgent-fix override: `CARGO_RESOLVER_INCOMPATIBLE_PUBLISH_AGE=allow cargo update -p <crate>`. Note: `cargo install` ignores the cooldown, so pin any tool installed that way.
+- Done: `[workspace.lints.cargo] unused_dependencies = "warn"` plus `[lints] workspace = true` in all four crates. `cargo check --workspace --all-targets` reports no unused deps (the stray `jiff-tzdb` was already removed in v1.4).
+- Done earlier (commit 718ffe2): README no longer claims release attestations.
+- Nothing to pin in CI: the workflow downloads no CLIs (no `mcp-publisher`); actions are already on fixed major tags (`checkout@v4`, `upload-artifact@v4`).
+Acceptance: both CI jobs green, cooldown probe line present, lint accepted, README matches the actual release assets, no new crate dependency.
 
 ### V1.5.1 Jiff 1.0 upgrade
 Jiff 1.0 shipped on 2026-11-15 with a long-term API commitment and documented breaking changes from 0.2. All four crates used 0.2.43. Read the changelog, bump the four manifests, keep the "O" UTC text format and ICU collation unchanged.
