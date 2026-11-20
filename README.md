@@ -142,8 +142,11 @@ HTTP to 127.0.0.1 only.
   auto-compacted after `MaxEventAgeDays` (default 90), and AI summaries are
   purged together with their events. Frames are not retained unless
   `RetainFrames: true`.
-- **Export and exclude (v1.3).** `activity-monitor-cli.exe export --from ... --to ... --format md|json`
-  writes your whole history (events plus AI summaries) to a file you own,
+- **Export and exclude (v1.3, v1.5).** `activity-monitor-cli.exe export --from ... --to ... --format md|json`
+  writes your whole history (events plus AI summaries) to a file you own.
+  `--format sqlite --output backup.db` (v1.5) writes a consistent snapshot of
+  the entire database via `VACUUM INTO`; `--from/--to` do not apply to it and
+  an existing file is never overwritten,
   which also covers GDPR-style portability and erasure requests (export,
   then delete the DB). `ExcludedProcesses` in `appsettings.json` lists apps
   that are never recorded: no focus event and no capture while they are in
@@ -264,6 +267,11 @@ cargo build --release --workspace
   permission (System Settings > Privacy & Security > Accessibility). No
   inference rows — Ollama is not running (`ollama serve`) or the model is not
   pulled (`ollama pull qwen3-vl:2b`); the service log prints the exact fix.
+- macOS: app and window title recorded but the text context is empty in
+  Electron/Chromium apps (VS Code, Slack, Chrome, Edge). Those apps expose no
+  accessibility tree until an assistive client is detected and enabled, so
+  the `axtext` backend has no element text to read there. Use
+  `ExcludedProcesses` to skip them, or wait for the opt-in screen backend.
 
 ## License
 

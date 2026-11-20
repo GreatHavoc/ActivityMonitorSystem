@@ -71,6 +71,14 @@ fn app_name_from_exe_path(path: &str) -> String {
     path.rsplit('/').next().unwrap_or(path).to_string()
 }
 
+/// Cross-process AX reads are synchronous; a frozen target app would block
+/// the service loop. Cap every element we read at one second.
+const AX_TIMEOUT_SECS: f32 = 1.0;
+
+fn cap_timeout(el: &axuielement::AXUIElement) {
+    let _ = el.set_timeout(AX_TIMEOUT_SECS);
+}
+
 fn ax_hint() {
     tracing::error!(
         "Accessibility permission missing or AX API disabled. Grant it in \
@@ -88,6 +96,7 @@ pub fn current_focus() -> Option<FocusInfo> {
     }
     let system = axuielement::system_wide()?;
     let app = system.focused_application().ok()??;
+    cap_timeout(&app);
     let pid = app.pid().ok()?;
     if pid <= 0 {
         return None;
@@ -97,6 +106,7 @@ pub fn current_focus() -> Option<FocusInfo> {
         .ok()
         .flatten()
         .and_then(|w| {
+            cap_timeout(&w);
             w.string_attribute(axuielement::ax_attribute::AX_TITLE_ATTRIBUTE)
                 .ok()
                 .flatten()
@@ -121,6 +131,7 @@ pub fn focus_text() -> Option<String> {
     }
     let system = axuielement::system_wide()?;
     let app = system.focused_application().ok()??;
+    cap_timeout(&app);
     let pid = app.pid().ok()?;
     if pid <= 0 {
         return None;
@@ -131,6 +142,7 @@ pub fn focus_text() -> Option<String> {
         .ok()
         .flatten()
         .and_then(|w| {
+            cap_timeout(&w);
             w.string_attribute(axuielement::ax_attribute::AX_TITLE_ATTRIBUTE)
                 .ok()
                 .flatten()
@@ -138,14 +150,22 @@ pub fn focus_text() -> Option<String> {
         .unwrap_or_default();
     let mut text = String::new();
     if let Some(focused) = system.focused_ui_element().ok().flatten() {
-        if let Ok(Some(v)) = focused.string_attribute(axuielement::ax_attribute::AX_VALUE_ATTRIBUTE) {
-            text = v;
-        }
-        if text.is_empty() {
-            if let Ok(Some(s)) =
-                focused.string_attribute(axuielement::ax_attribute::AX_SELECTED_TEXT_ATTRIBUTE)
-            {
-                text = s;
+        cap_timeout(&focused);
+        // One round trip for both attributes instead of two.
+        if let Ok(vals) = focused.copy_multiple_attribute_values(
+            &[
+                axuielement::ax_attribute::AX_VALUE_ATTRIBUTE,
+                axuielement::ax_attribute::AX_SELECTED_TEXT_ATTRIBUTE,
+            ],
+            axuielement::AXCopyMultipleAttributeOptions::NONE,
+        ) {
+            if let Some(v) = vals.first().and_then(|v| v.as_string()) {
+                text = v;
+            }
+            if text.is_empty() {
+                if let Some(s) = vals.get(1).and_then(|v| v.as_string()) {
+                    text = s;
+                }
             }
         }
     }

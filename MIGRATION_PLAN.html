@@ -73,7 +73,7 @@
 
 <h1>Activity Monitor — Rust Migration Plan</h1>
 <div class="sub">Product audit, library selection and migration workplan</div>
-<div class="meta">Document maintained through the migration &nbsp;·&nbsp; last updated 2026-11-20 &nbsp;·&nbsp; v1.0.0 to v1.4.0 released &nbsp;·&nbsp; <b>v1.5 planned, no code written</b></div>
+<div class="meta">Document maintained through the migration &nbsp;·&nbsp; last updated 2026-11-20 &nbsp;·&nbsp; v1.0.0 to v1.4.0 released &nbsp;·&nbsp; <b>v1.5 in progress: AX timeout, jiff 0.2.46, server.json fix, sqlite export done</b></div>
 
 <h2>1. Live status</h2>
 <div class="sticky">
@@ -118,8 +118,8 @@
     <tr><td>V1.5.2 MCP registry</td><td>Planned</td><td>GitHub device login; package or public HTTPS route</td><td>Fix schema, description and remote; validate with pinned publisher</td></tr>
     <tr><td>V1.5.3 macOS 27.3 permissions</td><td>Planned</td><td>No Mac with 27.3 here</td><td>Update install script, log hints and README for the new permission flow</td></tr>
     <tr><td>V1.5.4 model refresh</td><td>Experiment</td><td>No local eval yet</td><td>Measure parse rate, quality and latency before changing the default model</td></tr>
-      <tr><td>V1.5.5 macOS AX reliability</td><td>Planned, small</td><td>None</td><td>Set AX messaging timeout and batch attribute reads in <code>mac.rs</code>; document the Electron/Chromium empty-tree gap</td></tr>
-    <tr><td>V1.5.6 SQLite export</td><td>Planned, small</td><td>None</td><td><code>cli export --format sqlite</code> via <code>VACUUM INTO</code></td></tr>
+      <tr><td>V1.5.5 macOS AX reliability</td><td>Done 2026-11-20</td><td>macOS CI compile check</td><td>1 s AX timeout on every element read + batched attribute read in <code>mac.rs</code>; Electron/Chromium empty-tree gap documented in README</td></tr>
+    <tr><td>V1.5.6 SQLite export</td><td>Done 2026-11-20</td><td>None</td><td><code>cli export --format sqlite --output f.db</code> via <code>VACUUM INTO</code>, refuses to overwrite; round-trip test green</td></tr>
   </table>
   <p>Watch: Windows NPU APIs (Phi Silica is replaced by Aion Instruct in January 2027), ScreenCaptureKit regressions on macOS 26, MCP 2027-03-30. Rejected: vec1/sqlite-vector (needs an embedding runtime), FTS5 CVE action (rusqlite 0.40.2 already bundles SQLite 3.53.2+).</p>
   <p>Sources: This Week in Rust 677 and 678, Rust 1.100 notes, Jiff 1.0 announcement, MCP registry quickstart, Apple Developer News 2026-11-16, Ollama MLX post. All links in <code>ROADMAP.md</code>.</p>

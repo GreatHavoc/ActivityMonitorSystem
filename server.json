@@ -1,8 +1,8 @@
 {
-  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-10-17/server.schema.json",
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.greathavoc/activity-monitor",
   "title": "Activity Monitor",
-  "description": "Read-only MCP access to the local Activity Monitor database: activity timeline, day summaries, hybrid search over AI-written summaries, weekly digest, and a local-LLM 'ask about my day' tool. All data stays on the user's machine; the server opens the SQLite file read-only.",
+  "description": "Read-only MCP access to the local Activity Monitor database.",
   "version": "1.4.0",
   "license": "MIT",
   "repository": {

@@ -567,12 +567,21 @@ fn run_week(db: &ActivityDatabase, from: Option<String>, to: Option<String>, out
 }
 
 /// v1.3: `export` writes the raw records (events + AI summaries) as JSON or
-/// Markdown, so the user's history is a file they own.
+/// Markdown, so the user's history is a file they own. v1.5 adds `--format
+/// sqlite`: a whole-database snapshot via VACUUM INTO (from/to do not apply).
 fn run_export(from: Option<String>, to: Option<String>, output: Option<String>, format: String) -> ExitCode {
     let db = match open_db_quiet() {
         Ok(d) => d,
         Err(c) => return c,
     };
+    let format_norm = if format.trim().is_empty() {
+        "json".to_string()
+    } else {
+        format.trim().to_lowercase()
+    };
+    if format_norm == "sqlite" {
+        return export_sqlite(&db, output);
+    }
     let from_o = match date_bound(from.as_deref(), timefmt::days_ago_o(30)) {
         Ok(v) => v,
         Err(c) => return c,
@@ -588,11 +597,6 @@ fn run_export(from: Option<String>, to: Option<String>, output: Option<String>, 
     let inferences = match db.detailed_rows(&from_o, &to_o, 1_000_000) {
         Ok(r) => r,
         Err(e) => return fail(e),
-    };
-    let format_norm = if format.trim().is_empty() {
-        "json".to_string()
-    } else {
-        format.trim().to_lowercase()
     };
     let content = match format_norm.as_str() {
         "md" | "markdown" => {
@@ -662,6 +666,35 @@ fn run_export(from: Option<String>, to: Option<String>, output: Option<String>, 
         }
         None => println!("{content}"),
     }
+    ExitCode::SUCCESS
+}
+
+/// v1.5: whole-database snapshot via VACUUM INTO, one consistent file for
+/// backup/portability. Needs an explicit --output and refuses to overwrite.
+fn export_sqlite(db: &ActivityDatabase, output: Option<String>) -> ExitCode {
+    let out = match output {
+        Some(p) => p,
+        None => {
+            eprintln!("{}", "Error: --format sqlite needs --output <file>".red());
+            return ExitCode::from(1);
+        }
+    };
+    let target = std::path::Path::new(&out);
+    if target.exists() {
+        eprintln!("{}", format!("Error: {out} already exists; remove it first").red());
+        return ExitCode::from(1);
+    }
+    if let Some(parent) = target.parent() {
+        if !parent.as_os_str().is_empty() {
+            if let Err(e) = std::fs::create_dir_all(parent) {
+                return fail(e);
+            }
+        }
+    }
+    if let Err(e) = db.conn().execute("VACUUM INTO ?1", rusqlite::params![out]) {
+        return fail(e);
+    }
+    println!("{}", format!("Database snapshot written to {out}").green());
     ExitCode::SUCCESS
 }
 
@@ -855,5 +888,25 @@ mod tests {
         assert_eq!(trunc(&s100, 100).chars().count(), 100);
         let s80: String = "t".repeat(81);
         assert_eq!(trunc(&s80, 80).chars().count(), 80);
+    }
+
+    #[test]
+    fn sqlite_export_round_trip() {
+        let dir = std::env::temp_dir().join(format!("am-cli-export-{}", uuid::Uuid::new_v4()));
+        let src = dir.join("src.db");
+        let dst = dir.join("out.db");
+        let db = ActivityDatabase::open(&src).unwrap();
+        db.initialize().unwrap();
+        assert_eq!(export_sqlite(&db, Some(dst.to_string_lossy().into_owned())), ExitCode::SUCCESS);
+        // The snapshot opens read-only and has the schema; refusing to
+        // overwrite an existing file is a hard stop, not a clobber.
+        let snap = ActivityDatabase::open_read_only(&dst).unwrap();
+        let n: i64 = snap
+            .conn()
+            .query_row("SELECT count(*) FROM sqlite_master WHERE name = 'ActivityEvents'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(n, 1);
+        assert_eq!(export_sqlite(&db, Some(dst.to_string_lossy().into_owned())), ExitCode::from(1));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

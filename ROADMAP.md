@@ -333,7 +333,7 @@ Recording and accept the visible indicator.
 
 ## v1.5 plan (drafted 2026-11-20 from tech newsletter and changelog research)
 
-Status: planned. No v1.5 code is written and no v1.5 release exists. Scope is trust and platform follow-through from v1.4. ScreenCaptureKit (M2), notarization (M3), cloud sync and keystroke logging stay out.
+Status: in progress (started 2026-11-20). No v1.5 release exists yet. Scope is trust and platform follow-through from v1.4. ScreenCaptureKit (M2), notarization (M3), cloud sync and keystroke logging stay out. Done so far: jiff 0.2.46 bump, server.json schema/description fix, V1.5.5, V1.5.6.
 
 Sources checked on 2026-11-20:
 - This Week in Rust 677 (2026-11-11) and 678 (2026-11-18): https://this-week-in-rust.org/blog/2026/11/18/this-week-in-rust-678/
@@ -348,12 +348,12 @@ Rust 1.100 adds Cargo dependency cooldowns (`global-min-publish-age = "3 days"`)
 Acceptance: both CI jobs green, an intentionally unused dep is reported, README matches the actual release assets, no new crate dependency.
 
 ### V1.5.1 Jiff 1.0 upgrade
-Jiff 1.0 shipped on 2026-11-15 with a long-term API commitment and documented breaking changes from 0.2. All four crates use 0.2.43. Read the changelog, bump the four manifests, keep the "O" UTC text format and ICU collation unchanged.
-Fallback if the 1.0 churn stalls the release: 0.2.46 is same-API and carries the #707 soundness fix.
+Jiff 1.0 shipped on 2026-11-15 with a long-term API commitment and documented breaking changes from 0.2. All four crates used 0.2.43. Read the changelog, bump the four manifests, keep the "O" UTC text format and ICU collation unchanged.
+Interim done 2026-11-20: bumped to 0.2.46 (same API, carries the #707 soundness fix and tzdb 2026f); the 1.0 rename churn (`Zoned` to `ZonedDateTime` etc.) stays pending until this workstream is picked up.
 Acceptance: workspace tests green on Windows and macOS, CLI golden reports and DB timestamps unchanged, rollback is one pin per crate.
 
 ### V1.5.2 MCP registry readiness (needs user action)
-The registry quickstart uses schema 2025-12-11, a description limit of 100 characters, and either a package with ownership verification or a publicly accessible HTTPS remote. Our `server.json` uses schema 2025-10-17, a long description, and a loopback remote (`http://127.0.0.1:8765/mcp`), so validation will fail. Shorten the description, bump the schema, then pick one route: publish an OCI or MCPB package, or expose a public HTTPS endpoint. Use a pinned `mcp-publisher`, run `validate`, then `login github` (device code) and `publish`. Keep the local-first stdio server unchanged.
+The registry quickstart uses schema 2025-12-11, a description limit of 100 characters, and either a package with ownership verification or a publicly accessible HTTPS remote. Our `server.json` used schema 2025-10-17 and a long description, so validation would have failed; both are fixed as of 2026-11-20 (schema 2025-12-11, 61-char description). The remaining blocker is the loopback remote (`http://127.0.0.1:8765/mcp`): pick one route — publish an OCI or MCPB package, or expose a public HTTPS endpoint. Use a pinned `mcp-publisher`, run `validate`, then `login github` (device code) and `publish`. Keep the local-first stdio server unchanged.
 Acceptance: `mcp-publisher validate` passes and the listing appears under `io.github.greathavoc/activity-monitor`. Blocked until the user completes the GitHub device login and chooses the package or remote route.
 
 ### V1.5.3 macOS 27.3 permission onboarding (needs a real Mac)
@@ -365,28 +365,28 @@ Ollama's MLX engine update reports up to 20 percent faster output and NVFP4 abou
 Candidates: `gemma4:e2b` and `gemma4:e4b` (Apache 2.0, 128K context, text, image and audio, MLX variants on Apple Silicon).
 Acceptance: eval results recorded in RELEASE_NOTES, default changed only after parity, no new runtime dependency.
 
-### V1.5.5 macOS accessibility reliability (small, independent of 27.3)
-- Set an AX messaging timeout (about one second) on the focused application
-  before reading title or value, and fetch both in one
+### V1.5.5 macOS accessibility reliability (done 2026-11-20, pending mac CI)
+- Done: a one-second AX messaging timeout on every element we read (focused
+  app, window, focused element) in `crates/activity-monitor-core/src/mac.rs`
+  via `AXUIElement::set_timeout`, plus value + selected text fetched in one
   `copy_multiple_attribute_values` call. A frozen target app otherwise blocks
   the service loop because every AX read is a synchronous cross-process call.
-  axuielement 0.10.2 provides `AXUIElement::set_timeout(f32)`. File:
-  `crates/activity-monitor-core/src/mac.rs`. The macos-15 runner has no
-  Accessibility grant, so CI covers compile plus the clean-failure path.
-- Document the AX gap for Electron and Chromium apps (VS Code, Slack, Chrome):
-  they expose no accessibility tree until an assistive client is detected and
-  enabled, so axtext returns app and title with empty text. Add this to the
-  README and troubleshooting, and point to `ExcludedProcesses` or the future
-  screen backend.
-- Acceptance: mac CI green; a hung AX target cannot block the loop longer than
-  the timeout.
+- Done: the AX gap for Electron and Chromium apps (VS Code, Slack, Chrome) is
+  documented in the README troubleshooting — no accessibility tree until an
+  assistive client is enabled, so axtext returns app and title with empty text
+  there; pointed to `ExcludedProcesses` and the future screen backend.
+- Acceptance: mac CI green (the macos-15 runner has no Accessibility grant, so
+  CI covers compile plus the clean-failure path); a hung AX target cannot block
+  the loop longer than the timeout.
 
-### V1.5.6 SQLite export (small)
-- Add `cli export --format sqlite` via `VACUUM INTO` (SQLite 3.53+). One
-  consistent file for backup and portability, next to the existing md and json.
-  Change in `crates/activity-monitor-cli`.
-- Acceptance: the exported file opens read-only in the MCP server and row
-  counts match the source database.
+### V1.5.6 SQLite export (done 2026-11-20)
+- Done: `cli export --format sqlite --output backup.db` via `VACUUM INTO`
+  (SQLite 3.53+) in `crates/activity-monitor-cli`; one consistent whole-database
+  snapshot next to the existing md and json. `--from/--to` do not apply and an
+  existing output file is never overwritten.
+- Acceptance met by `sqlite_export_round_trip`: the snapshot opens read-only,
+  carries the schema, and re-export onto the same path fails instead of
+  clobbering.
 
 ### Watch, do not build yet
 - Windows AI APIs (NPU). Image Description and Text Recognition (OCR) are
