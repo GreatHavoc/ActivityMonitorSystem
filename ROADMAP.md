@@ -331,77 +331,83 @@ Recording and accept the visible indicator.
 
 ---
 
-## v1.5 candidates (research scan 2026-11-20)
+## v1.5 plan (drafted 2026-11-20 from tech newsletter and changelog research)
 
-Sources read: Ollama release notes 0.40.0 to 0.40.17, the Gemma 4 model card and
-Ollama library page, rusqlite releases, the jiff changelog, MCP spec and registry
-docs, Windows AI APIs docs, and macOS AX implementation notes. Each item names
-the evidence and the files it would touch.
+Status: planned. No v1.5 code is written and no v1.5 release exists. Scope is trust and platform follow-through from v1.4. ScreenCaptureKit (M2), notarization (M3), cloud sync and keystroke logging stay out.
 
-### Now, small and low risk
+Sources checked on 2026-11-20:
+- This Week in Rust 677 (2026-11-11) and 678 (2026-11-18): https://this-week-in-rust.org/blog/2026/11/18/this-week-in-rust-678/
+- Rust 1.100.0 release notes (2026-11-12), Cargo cooldowns and unused-dependency lint: https://blog.rust-lang.org/releases/latest/
+- Jiff 1.0 announcement (2026-11-15) and 0.2 to 1.0 changelog: https://burntsushi.net/jiff/
+- MCP Registry publishing quickstart, schema 2025-12-11 and remote URL rules: https://raw.githubusercontent.com/modelcontextprotocol/registry/main/docs/modelcontextprotocol-io/quickstart.mdx
+- Apple Developer News (2026-11-16), permission changes in macOS 27.3: https://developer.apple.com/news/?id=oqng0zjk
+- Ollama MLX engine post (2026-06-11), speed and NVFP4 results: https://ollama.com/blog/mlx-performance
 
-1. macOS AX hang guard. A frozen target app blocks our service loop because
-   every AX read is a synchronous cross-process call. axuielement 0.10.2
-   provides `AXUIElement::set_timeout(f32)`; set about one second on the focused
-   app before reading title or value, and fetch both in one
-   `copy_multiple_attribute_values` call. File:
-   `crates/activity-monitor-core/src/mac.rs`. The macos-15 runner has no
-   Accessibility grant, so CI covers compile plus the clean-failure path.
-2. jiff 0.2.43 to 0.2.46. Same API. It fixes an unsound internal API (#707) and
-   ships tzdb 2026f. Do not move to 1.0 yet: `Zoned` became `ZonedDateTime`,
-   `to_zoned` became `to_zoned_datetime`, and `Timestamp - Timestamp` now
-   returns `SignedDuration`; six call sites change for no functional gain.
-3. server.json hygiene. Registry examples use schema `2025-12-11` (ours says
-   `2025-10-17`) and limit `description` to 100 characters (ours is about 250,
-   so a publish would fail validation). This is metadata hygiene only. The
-   registry also needs an npm or PyPI package or a public remote URL; this
-   server is local-only, so submission stays out of scope.
-4. Document macOS AX limits. Electron and Chromium apps (VS Code, Slack,
-   Chrome) expose no accessibility tree until an assistive client is detected
-   and enabled, so axtext returns app and title with empty text. Add this to the
-   README and troubleshooting, and point to `ExcludedProcesses` or the future
-   screen backend.
+### V1.5.0 Toolchain and supply chain (first, smallest)
+Rust 1.100 adds Cargo dependency cooldowns (`global-min-publish-age = "3 days"`) and reports unused dependencies. v1.4 CI exposed both problems: an unused `jiff-tzdb` dep and a local disk full of build artifacts. Set the cooldown in `.cargo/config.toml` and add the `[lints.cargo]` unused-dependency lint to the workspace. Pin any CLI that CI downloads to a fixed version tag; TWIR 677 carried an issue about an unpinned `mcp-publisher` with `id-token: write`. Correct the README line that says releases carry a GitHub attestation: v1.3 and v1.4 notes list attestation as a follow-up, so the shipped assets are zips plus SHA256SUMS.
+Acceptance: both CI jobs green, an intentionally unused dep is reported, README matches the actual release assets, no new crate dependency.
 
-### Next, evaluate then decide
+### V1.5.1 Jiff 1.0 upgrade
+Jiff 1.0 shipped on 2026-11-15 with a long-term API commitment and documented breaking changes from 0.2. All four crates use 0.2.43. Read the changelog, bump the four manifests, keep the "O" UTC text format and ICU collation unchanged.
+Fallback if the 1.0 churn stalls the release: 0.2.46 is same-API and carries the #707 soundness fix.
+Acceptance: workspace tests green on Windows and macOS, CLI golden reports and DB timestamps unchanged, rollback is one pin per crate.
 
-5. Gemma 4 edge models as an optional vision model. `gemma4:e2b` (2.3B
-   effective, 5.1B total, 4.6 to 7.5 GB, 128K context, text, image and audio,
-   with an MLX variant) and `gemma4:e4b` are Apache 2.0 and built for on-device
-   use. Ollama runs MLX by default on Apple Silicon since 0.40. Build a fixed
-   20-frame fixture (editor, browser, terminal, docs, chat, video), compare
-   label, summary and `visible_text` accuracy plus latency and RAM against
-   `qwen3-vl:2b`, then decide. Model choice is already config, so the code
-   change is documentation plus a preset.
-6. SQLite export format. Add `cli export --format sqlite` via `VACUUM INTO`
-   (SQLite 3.53+). One consistent file for backup and portability, next to the
-   existing md and json. Small change in `crates/activity-monitor-cli`.
+### V1.5.2 MCP registry readiness (needs user action)
+The registry quickstart uses schema 2025-12-11, a description limit of 100 characters, and either a package with ownership verification or a publicly accessible HTTPS remote. Our `server.json` uses schema 2025-10-17, a long description, and a loopback remote (`http://127.0.0.1:8765/mcp`), so validation will fail. Shorten the description, bump the schema, then pick one route: publish an OCI or MCPB package, or expose a public HTTPS endpoint. Use a pinned `mcp-publisher`, run `validate`, then `login github` (device code) and `publish`. Keep the local-first stdio server unchanged.
+Acceptance: `mcp-publisher validate` passes and the listing appears under `io.github.greathavoc/activity-monitor`. Blocked until the user completes the GitHub device login and chooses the package or remote route.
 
-### Later, watch only
+### V1.5.3 macOS 27.3 permission onboarding (needs a real Mac)
+Apple announced on 2026-11-16 that macOS 27.3 changes permission handling: Device Control and Data Access are split, users grant access by selecting the requesting app from a list, apps can ask every time, and a transparency indicator appears. Apple asks developers to adjust onboarding and handle limited access. Our install script, service log and README still describe the older Accessibility pane. Update those prompts and treat denied or ask-every-time AX access as idle-only with a clear log, keeping the no-screenshots path.
+Acceptance: updated script, log and README text, plus a smoke test on macOS 27.3. Blocked until a Mac with 27.3 is available.
 
-7. Windows AI APIs (NPU). Image Description and Text Recognition (OCR) are
-   NPU-only and need Windows App SDK bindings. Phi Silica is being replaced by
-   Aion Instruct (Insiders December 2026, retail January 2027), so work now
-   would target a model with a removal date. Revisit after Aion lands and a
-   Copilot+ test machine exists.
-8. ScreenCaptureKit screen backend (macOS M2). Still Later. macOS 26 Tahoe has
-   open SCK regressions (some captures return the desktop instead of app
-   windows) and the recording indicator remains mandatory.
-9. MCP protocol. 2026-07-28 is current. The next release is 2027-03-30 on the
-   new six-month cycle, and the registry is still preview. No work until then.
+### V1.5.4 Inference model refresh (experiment)
+Ollama's MLX engine update reports up to 20 percent faster output and NVFP4 about 20 percent faster than q4_K_M with less quality loss, measured on Gemma 4 12B and an M5 Max. Our shipped default is still `qwen3-vl:2b`. Run a fixed local eval of candidate text and vision tags against that default: structured parse rate, label quality and latency. Change the shipped default only when quality holds and latency improves.
+Candidates: `gemma4:e2b` and `gemma4:e4b` (Apache 2.0, 128K context, text, image and audio, MLX variants on Apple Silicon).
+Acceptance: eval results recorded in RELEASE_NOTES, default changed only after parity, no new runtime dependency.
 
-### Rejected
+### V1.5.5 macOS accessibility reliability (small, independent of 27.3)
+- Set an AX messaging timeout (about one second) on the focused application
+  before reading title or value, and fetch both in one
+  `copy_multiple_attribute_values` call. A frozen target app otherwise blocks
+  the service loop because every AX read is a synchronous cross-process call.
+  axuielement 0.10.2 provides `AXUIElement::set_timeout(f32)`. File:
+  `crates/activity-monitor-core/src/mac.rs`. The macos-15 runner has no
+  Accessibility grant, so CI covers compile plus the clean-failure path.
+- Document the AX gap for Electron and Chromium apps (VS Code, Slack, Chrome):
+  they expose no accessibility tree until an assistive client is detected and
+  enabled, so axtext returns app and title with empty text. Add this to the
+  README and troubleshooting, and point to `ExcludedProcesses` or the future
+  screen backend.
+- Acceptance: mac CI green; a hung AX target cannot block the loop longer than
+  the timeout.
 
-- sqlite-vec and SQLite vec1. vec1 is pre-1.0 and not in the amalgamation or any
-  distribution package; sqlite-vector is a third-party C extension. Both need an
-  embedding model at runtime, which v1.2 deliberately removed. Hybrid FTS5 plus
-  trigram stays.
-- Phi Silica integration now. The model is removed from Windows in January 2027
-  and the Windows App SDK binding cost is high.
-- FTS5 CVE response. CVE-2026-11822 and CVE-2026-11824 are fixed in SQLite
-  3.53.2, and rusqlite 0.40.2 already bundles that version (0.40.1 bumped it).
-  The fixes in rusqlite 0.43 target Session, column_metadata and Filter paths
-  this project does not use. A bump is optional maintenance, not a security
-  need.
+### V1.5.6 SQLite export (small)
+- Add `cli export --format sqlite` via `VACUUM INTO` (SQLite 3.53+). One
+  consistent file for backup and portability, next to the existing md and json.
+  Change in `crates/activity-monitor-cli`.
+- Acceptance: the exported file opens read-only in the MCP server and row
+  counts match the source database.
+
+### Watch, do not build yet
+- Windows AI APIs (NPU). Image Description and Text Recognition (OCR) are
+  NPU-only and need Windows App SDK bindings. Phi Silica is being replaced by
+  Aion Instruct (Insiders December 2026, retail January 2027), so work now
+  would target a model with a removal date. Revisit after Aion lands and a
+  Copilot+ test machine exists.
+- ScreenCaptureKit backend. macOS 26 Tahoe has open SCK regressions (some
+  captures return the desktop instead of app windows) and the recording
+  indicator remains mandatory. M2 stays Later.
+- MCP protocol. 2026-07-28 is current. The next release is 2027-03-30 on the
+  new six-month cycle, and the registry is still preview. No work until then.
+- Rejected: sqlite-vec and SQLite vec1. vec1 is pre-1.0 and not in the
+  amalgamation or any distribution package; sqlite-vector is a third-party C
+  extension. Both need an embedding model at runtime, which v1.2 deliberately
+  removed.
+- No FTS5 CVE action needed. CVE-2026-11822 and CVE-2026-11824 are fixed in
+  SQLite 3.53.2, and rusqlite 0.40.2 already bundles that version (0.40.1
+  bumped it). The fixes in rusqlite 0.43 target Session, column_metadata and
+  Filter paths this project does not use.
+
 
 ---
 
