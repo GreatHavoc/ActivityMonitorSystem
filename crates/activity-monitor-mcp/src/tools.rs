@@ -221,14 +221,14 @@ fn parse_any_timestamp(s: &str) -> Result<Timestamp, String> {
     let s2 = s.replace(' ', "T");
     if let Ok(dt) = s2.parse::<jiff::civil::DateTime>() {
         return dt
-            .to_zoned(TimeZone::system())
+            .to_zoned_datetime(TimeZone::system())
             .map(|z| z.timestamp())
             .map_err(|e| e.to_string());
     }
     if let Ok(d) = s.parse::<jiff::civil::Date>() {
         return d
             .at(0, 0, 0, 0)
-            .to_zoned(TimeZone::system())
+            .to_zoned_datetime(TimeZone::system())
             .map(|z| z.timestamp())
             .map_err(|e| e.to_string());
     }
@@ -258,7 +258,7 @@ fn activity_at(state: &ToolState, args: &Value) -> Result<Value, String> {
         .filter_map(|r| {
             timefmt::parse_o(&r.timestamp)
                 .ok()
-                .map(|t| ((t - center).abs().get_seconds().abs(), r))
+                .map(|t| ((t - center).abs().as_secs().abs(), r))
         })
         .min_by_key(|(d, _)| *d)
         .map(|(_, r)| {

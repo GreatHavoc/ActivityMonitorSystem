@@ -8,7 +8,7 @@ license.workspace = true
 activity-monitor-core = { path = "../activity-monitor-core" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-jiff = "0.2.43"
+jiff = "1"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "io-std", "io-util", "net", "time", "sync"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["fmt"] }

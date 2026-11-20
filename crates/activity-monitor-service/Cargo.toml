@@ -9,7 +9,7 @@ activity-monitor-core = { path = "../activity-monitor-core" }
 tracing = "0.1"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal", "time", "sync"] }
 uuid = { version = "1", features = ["v4"] }
-jiff = "0.2"
+jiff = "1"
 
 [target.'cfg(windows)'.dependencies]
 windows-service = "0.8.1"

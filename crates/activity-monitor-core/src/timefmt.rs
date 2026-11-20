@@ -1,5 +1,5 @@
-//! Timestamp contract: TEXT "O" format UTC, byte-compatible with
-//! DateTime.UtcNow.ToString("O") — exactly 7 fractional digits, Z suffix.
+﻿//! Timestamp contract: TEXT "O" format UTC, byte-compatible with
+//! DateTime.UtcNow.ToString("O") â€” exactly 7 fractional digits, Z suffix.
 
 use jiff::tz::TimeZone;
 use jiff::Timestamp;
@@ -29,7 +29,7 @@ pub fn parse_local_date(s: &str) -> Result<jiff::civil::Date, jiff::Error> {
 pub fn date_midnight_utc_o(d: &jiff::civil::Date) -> String {
     let ts = d
         .at(0, 0, 0, 0)
-        .to_zoned(TimeZone::system())
+        .to_zoned_datetime(TimeZone::system())
         .map(|z| z.timestamp())
         .unwrap_or_else(|_| Timestamp::now());
     format_o(&ts)
@@ -50,7 +50,7 @@ pub fn next_day_local_midnight_utc_o(s: &str) -> Result<String, jiff::Error> {
 }
 
 pub fn today_local_date() -> jiff::civil::Date {
-    Timestamp::now().to_zoned(TimeZone::system()).date()
+    Timestamp::now().to_zoned_datetime(TimeZone::system()).date()
 }
 
 /// Local midnight today, as a UTC "O" string (replaces DateTime.Today.ToString("O")).
@@ -66,7 +66,7 @@ pub fn days_ago_o(days: i64) -> String {
 
 /// Stored UTC timestamp rendered in the local zone as "yyyy-MM-dd HH:mm:ss".
 pub fn utc_to_local_display(ts: &Timestamp) -> String {
-    ts.to_zoned(TimeZone::system()).strftime("%Y-%m-%d %H:%M:%S").to_string()
+    ts.to_zoned_datetime(TimeZone::system()).strftime("%Y-%m-%d %H:%M:%S").to_string()
 }
 
 #[cfg(test)]
@@ -118,7 +118,7 @@ mod tests {
         let next = next_day_local_midnight_utc_o("2026-11-13").unwrap();
         let a = parse_o(&from).unwrap();
         let b = parse_o(&next).unwrap();
-        let diff = (b - a).get_seconds();
+        let diff = (b - a).as_secs();
         assert_eq!(diff, 86_400);
     }
 }

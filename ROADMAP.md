@@ -350,10 +350,9 @@ Sources checked on 2026-11-20:
 - Nothing to pin in CI: the workflow downloads no CLIs (no `mcp-publisher`); actions are already on fixed major tags (`checkout@v4`, `upload-artifact@v4`).
 Acceptance: both CI jobs green, cooldown probe line present, lint accepted, README matches the actual release assets, no new crate dependency.
 
-### V1.5.1 Jiff 1.0 upgrade
-Jiff 1.0 shipped on 2026-11-15 with a long-term API commitment and documented breaking changes from 0.2. All four crates used 0.2.43. Read the changelog, bump the four manifests, keep the "O" UTC text format and ICU collation unchanged.
-Interim done 2026-11-20: bumped to 0.2.46 (same API, carries the #707 soundness fix and tzdb 2026f); the 1.0 rename churn (`Zoned` to `ZonedDateTime` etc.) stays pending until this workstream is picked up.
-Acceptance: workspace tests green on Windows and macOS, CLI golden reports and DB timestamps unchanged, rollback is one pin per crate.
+### V1.5.1 Jiff 1.0 upgrade (done 2026-11-20)
+All four crates moved to jiff 1.0.1. The only breaking changes that bit: `to_zoned` renamed to `to_zoned_datetime` (8 call sites across timefmt, cli main/llm, mcp tools) and `Timestamp - Timestamp` now returns `SignedDuration`, so two `.get_seconds()` calls became `.as_secs()` (same truncating semantics). `Timestamp - std::time::Duration`, `Span`, and the "O" UTC text format are unchanged. The 3-day publish cooldown held back 1.0.1 at first; it was forced through with the documented `CARGO_RESOLVER_INCOMPATIBLE_PUBLISH_AGE=allow` override because 1.0.1 fixes an out-of-bounds timestamp parse (#714). Rollback is one pin per crate (`jiff = "0.2"`).
+Acceptance: workspace tests 75/75 green on Windows, macOS CI green, timestamp format tests (28-char "O", trailing Z) unchanged.
 
 ### V1.5.2 MCP registry readiness (needs user action)
 The registry quickstart uses schema 2025-12-11, a description limit of 100 characters, and either a package with ownership verification or a publicly accessible HTTPS remote. Our `server.json` used schema 2025-10-17 and a long description, so validation would have failed; both are fixed as of 2026-11-20 (schema 2025-12-11, 61-char description). The remaining blocker is the loopback remote (`http://127.0.0.1:8765/mcp`): pick one route — publish an OCI or MCPB package, or expose a public HTTPS endpoint. Use a pinned `mcp-publisher`, run `validate`, then `login github` (device code) and `publish`. Keep the local-first stdio server unchanged.

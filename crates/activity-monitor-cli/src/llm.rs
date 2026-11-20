@@ -1,4 +1,4 @@
-//! LLM-optimized report (schema "3.0-llm") — port of GenerateLlmReportAsync and its
+﻿//! LLM-optimized report (schema "3.0-llm") â€” port of GenerateLlmReportAsync and its
 //! helpers (InferProjects, ExtractSignificantMoments, BuildHourlyBreakdown,
 //! BuildTopActivities, BuildDayPatterns, BuildExecutiveSummary, ProjectBuilder).
 //! Serde field order matches the C# class declaration order for canonical diffs.
@@ -52,7 +52,7 @@ fn ts(s: &str) -> Timestamp {
 }
 
 fn local_dt(t: &Timestamp) -> DateTime {
-    t.to_zoned(TimeZone::system()).datetime()
+    t.to_zoned_datetime(TimeZone::system()).datetime()
 }
 
 fn local_hhmm(t: &Timestamp) -> String {
@@ -77,7 +77,7 @@ fn fmt_h_mm_tt(dt: &DateTime) -> String {
     format!("{h12}:{:02} {ampm}", dt.minute())
 }
 
-/// Group by exact (case-sensitive) key, first-encounter order — LINQ GroupBy semantics.
+/// Group by exact (case-sensitive) key, first-encounter order â€” LINQ GroupBy semantics.
 fn group_count(items: &[String]) -> Vec<(String, i64)> {
     let mut out: Vec<(String, i64)> = vec![];
     for it in items {
@@ -89,7 +89,7 @@ fn group_count(items: &[String]) -> Vec<(String, i64)> {
     out
 }
 
-/// Stable descending-by-count sort — LINQ OrderByDescending is stable.
+/// Stable descending-by-count sort â€” LINQ OrderByDescending is stable.
 fn sort_desc_count(v: &mut Vec<(String, i64)>) {
     v.sort_by(|a, b| b.1.cmp(&a.1));
 }
@@ -371,9 +371,9 @@ fn format_duration_static(seconds: i64) -> String {
     }
 }
 
-/// C# title.Split(new[] { " - ", " – ", " | " }, RemoveEmptyEntries).
+/// C# title.Split(new[] { " - ", " â€“ ", " | " }, RemoveEmptyEntries).
 fn split_title(title: &str) -> Vec<String> {
-    let re = Regex::new(r" - | – | \| ").unwrap();
+    let re = Regex::new(r" - | â€“ | \| ").unwrap();
     re.split(title).filter(|s| !s.is_empty()).map(|s| s.to_string()).collect()
 }
 
@@ -381,7 +381,7 @@ fn infer_projects(events: &[EventSnapshotRow], insights: &[Insight]) -> Vec<LlmP
     let path_patterns = [
         Regex::new(r"(?i)[/\\]([^/\\]+)[/\\](src|lib|app|bin|obj|node_modules|\.git)[/\\]?").unwrap(),
         Regex::new(r"(?i)[A-Za-z]:[/\\](?:Office|Projects?|Work|Dev|Code|repos?)[/\\]([^/\\]+)").unwrap(),
-        Regex::new(r"(?i)[/\\]([^/\\]+)\s*[-–]\s*(Visual Studio|VS Code|Code|Antigravity)").unwrap(),
+        Regex::new(r"(?i)[/\\]([^/\\]+)\s*[-â€“]\s*(Visual Studio|VS Code|Code|Antigravity)").unwrap(),
     ];
     let file_re = Regex::new(r"(?i)([a-zA-Z_][a-zA-Z0-9_]*\.(py|cs|js|ts|json|yaml|yml|md|txt|html|css|sql))").unwrap();
 
@@ -985,7 +985,7 @@ mod tests {
         let pats = [
             Regex::new(r"(?i)[/\\]([^/\\]+)[/\\](src|lib|app|bin|obj|node_modules|\.git)[/\\]?").unwrap(),
             Regex::new(r"(?i)[A-Za-z]:[/\\](?:Office|Projects?|Work|Dev|Code|repos?)[/\\]([^/\\]+)").unwrap(),
-            Regex::new(r"(?i)[/\\]([^/\\]+)\s*[-–]\s*(Visual Studio|VS Code|Code|Antigravity)").unwrap(),
+            Regex::new(r"(?i)[/\\]([^/\\]+)\s*[-â€“]\s*(Visual Studio|VS Code|Code|Antigravity)").unwrap(),
         ];
         let m = pats[0].captures("C:\\Users\\x\\rust-version\\src\\main.rs").unwrap();
         assert_eq!(m.get(1).unwrap().as_str(), "rust-version");
@@ -1000,7 +1000,7 @@ mod tests {
     #[test]
     fn split_title_matches_csharp() {
         assert_eq!(split_title("main.rs - rust-version"), vec!["main.rs", "rust-version"]);
-        assert_eq!(split_title("a | b – c"), vec!["a", "b", "c"]);
+        assert_eq!(split_title("a | b â€“ c"), vec!["a", "b", "c"]);
         assert_eq!(split_title(" - "), Vec::<String>::new());
     }
 

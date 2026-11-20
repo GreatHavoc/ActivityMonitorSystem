@@ -1,4 +1,4 @@
-use std::process::ExitCode;
+﻿use std::process::ExitCode;
 
 mod culture;
 mod llm;
@@ -61,7 +61,7 @@ enum Commands {
         output: Option<String>,
         #[arg(long, default_value = "json")]
         format: String,
-        /// LLM-optimized report (schema 3.0-llm) — Phase 4, not yet ported
+        /// LLM-optimized report (schema 3.0-llm) â€” Phase 4, not yet ported
         #[arg(long)]
         llm: bool,
         /// v1.3: weekly digest as a Markdown file instead of the JSON report
@@ -214,7 +214,7 @@ fn header_date(arg: Option<&str>) -> Result<String, ExitCode> {
 }
 
 /// "to" bound for day-inclusive commands: local midnight of the day after the
-/// given date (or after today), as UTC "O" — replaces AddDays(1).ToUniversalTime().
+/// given date (or after today), as UTC "O" â€” replaces AddDays(1).ToUniversalTime().
 fn next_day_bound(arg: Option<&str>) -> Result<String, ExitCode> {
     let today = timefmt::today_local_date().strftime("%Y-%m-%d").to_string();
     let s = arg.unwrap_or(&today);
@@ -226,7 +226,7 @@ fn next_day_bound(arg: Option<&str>) -> Result<String, ExitCode> {
 
 fn local_display_o(ts_o: &str, fmt: &str) -> String {
     timefmt::parse_o(ts_o)
-        .map(|t| t.to_zoned(jiff::tz::TimeZone::system()).strftime(fmt).to_string())
+        .map(|t| t.to_zoned_datetime(jiff::tz::TimeZone::system()).strftime(fmt).to_string())
         .unwrap_or_else(|_| ts_o.to_string())
 }
 
@@ -342,10 +342,10 @@ fn run_timeline(from: Option<String>, to: Option<String>) -> ExitCode {
     for e in &entries {
         let time = local_display_o(&e.timestamp, "%H:%M:%S");
         if e.is_idle {
-            println!("{} {}", time.dimmed(), "● IDLE".yellow());
+            println!("{} {}", time.dimmed(), "â— IDLE".yellow());
         } else if let Some(label) = &e.activity_label {
             if !label.is_empty() {
-                println!("{} {}", time.dimmed(), format!("● {label}").cyan());
+                println!("{} {}", time.dimmed(), format!("â— {label}").cyan());
                 if let Some(app) = &e.application {
                     if !app.is_empty() {
                         println!("         {} {}", "App:".dimmed(), app);
@@ -386,7 +386,7 @@ fn run_timeline(from: Option<String>, to: Option<String>) -> ExitCode {
 fn print_process_line(time: &str, process: &Option<String>, window: &Option<String>) {
     let process_info = process.clone().unwrap_or_else(|| "Unknown".into());
     let window_info = window.clone().map(|w| trunc(&w, 50)).unwrap_or_default();
-    println!("{} {} {}", time.dimmed(), format!("● {process_info}").green(), window_info.dimmed());
+    println!("{} {} {}", time.dimmed(), format!("â— {process_info}").green(), window_info.dimmed());
 }
 
 fn run_detailed(from: Option<String>, to: Option<String>, limit: i64) -> ExitCode {
@@ -438,7 +438,7 @@ fn run_detailed(from: Option<String>, to: Option<String>, limit: i64) -> ExitCod
         println!("{}", "Visible Text:".dimmed());
         println!("{}", or_na(&r.visible_text).dimmed());
         println!();
-        // C# {confidence:P0} — percent, 0 decimals
+        // C# {confidence:P0} â€” percent, 0 decimals
         println!("{} {}%", "Confidence:".dimmed(), (r.confidence * 100.0).round() as i64);
         println!();
     }
@@ -517,7 +517,7 @@ fn run_summary(date: Option<String>) -> ExitCode {
         ];
         let max = items.iter().map(|(_, c)| *c).max().unwrap_or(0).max(1);
         for (label, count) in items {
-            let bar = "█".repeat((count * 60 / max) as usize);
+            let bar = "â–ˆ".repeat((count * 60 / max) as usize);
             println!("{label:<14} |{bar} {count}");
         }
     }
@@ -746,7 +746,7 @@ fn run_report(from: Option<String>, to: Option<String>, output: Option<String>, 
                 name.push_str(&to_d.strftime("%Y%m%d").to_string());
             }
             name.push('-');
-            name.push_str(&jiff::Timestamp::now().to_zoned(jiff::tz::TimeZone::system()).strftime("%H%M%S").to_string());
+            name.push_str(&jiff::Timestamp::now().to_zoned_datetime(jiff::tz::TimeZone::system()).strftime("%H%M%S").to_string());
             name.push('.');
             name.push_str("json"); // normalizedFormat after the warning above
             name
@@ -773,7 +773,7 @@ fn run_report(from: Option<String>, to: Option<String>, output: Option<String>, 
             Ok(r) => r,
             Err(e) => return fail(e),
         };
-        // C# File.WriteAllText(json, UTF8) — no trailing newline; BOM drift accepted (plan)
+        // C# File.WriteAllText(json, UTF8) â€” no trailing newline; BOM drift accepted (plan)
         let json = match serde_json::to_string_pretty(&rep) {
             Ok(j) => j,
             Err(e) => return fail(e),
