@@ -333,7 +333,7 @@ Recording and accept the visible indicator.
 
 ## v1.5 plan (drafted 2026-11-20 from tech newsletter and changelog research)
 
-Status: in progress (started 2026-11-20). No v1.5 release exists yet. Scope is trust and platform follow-through from v1.4. ScreenCaptureKit (M2), notarization (M3), cloud sync and keystroke logging stay out. Done so far: V1.5.0, V1.5.5, V1.5.6, jiff 0.2.46 bump, server.json schema/description fix.
+Status: in progress (started 2026-11-20). No v1.5 release exists yet. Scope is trust and platform follow-through from v1.4. ScreenCaptureKit (M2), notarization (M3), cloud sync and keystroke logging stay out. Done so far: V1.5.0, V1.5.1 (jiff 1.0.1), V1.5.3 docs, V1.5.5, V1.5.6, server.json schema/description fix. Rejected: V1.5.4 model refresh. Pending on user/hardware: registry publish (V1.5.2), 27.3 smoke test (V1.5.3).
 
 Sources checked on 2026-11-20:
 - This Week in Rust 677 (2026-11-11) and 678 (2026-11-18): https://this-week-in-rust.org/blog/2026/11/18/this-week-in-rust-678/
@@ -358,14 +358,12 @@ Acceptance: workspace tests 75/75 green on Windows, macOS CI green, timestamp fo
 The registry quickstart uses schema 2025-12-11, a description limit of 100 characters, and either a package with ownership verification or a publicly accessible HTTPS remote. Our `server.json` used schema 2025-10-17 and a long description, so validation would have failed; both are fixed as of 2026-11-20 (schema 2025-12-11, 61-char description). The remaining blocker is the loopback remote (`http://127.0.0.1:8765/mcp`): pick one route — publish an OCI or MCPB package, or expose a public HTTPS endpoint. Use a pinned `mcp-publisher`, run `validate`, then `login github` (device code) and `publish`. Keep the local-first stdio server unchanged.
 Acceptance: `mcp-publisher validate` passes and the listing appears under `io.github.greathavoc/activity-monitor`. Blocked until the user completes the GitHub device login and chooses the package or remote route.
 
-### V1.5.3 macOS 27.3 permission onboarding (needs a real Mac)
-Apple announced on 2026-11-16 that macOS 27.3 changes permission handling: Device Control and Data Access are split, users grant access by selecting the requesting app from a list, apps can ask every time, and a transparency indicator appears. Apple asks developers to adjust onboarding and handle limited access. Our install script, service log and README still describe the older Accessibility pane. Update those prompts and treat denied or ask-every-time AX access as idle-only with a clear log, keeping the no-screenshots path.
-Acceptance: updated script, log and README text, plus a smoke test on macOS 27.3. Blocked until a Mac with 27.3 is available.
+### V1.5.3 macOS 27.3 permission onboarding (docs done 2026-11-20, smoke test needs a real Mac)
+Apple announced on 2026-11-16 that macOS 27.3 changes permission handling: users grant access by selecting the requesting app from a list, apps can ask every time, and a transparency indicator appears. Done: `install-macos.sh`, the service log hint in `mac.rs::ax_hint`, and the README (setup step 4 and troubleshooting) now describe both the classic Accessibility pane and the 27.3 flow, and note the indicator. Denied or ask-every-time AX access already degrades to idle-only with a clear log line (v1.4 behavior, unchanged); the no-screenshots path stays.
+Acceptance remaining: smoke test on a Mac running 27.3. Blocked until one is available.
 
-### V1.5.4 Inference model refresh (experiment)
-Ollama's MLX engine update reports up to 20 percent faster output and NVFP4 about 20 percent faster than q4_K_M with less quality loss, measured on Gemma 4 12B and an M5 Max. Our shipped default is still `qwen3-vl:2b`. Run a fixed local eval of candidate text and vision tags against that default: structured parse rate, label quality and latency. Change the shipped default only when quality holds and latency improves.
-Candidates: `gemma4:e2b` and `gemma4:e4b` (Apache 2.0, 128K context, text, image and audio, MLX variants on Apple Silicon).
-Acceptance: eval results recorded in RELEASE_NOTES, default changed only after parity, no new runtime dependency.
+### V1.5.4 Inference model refresh (rejected 2026-11-20, user decision)
+Rejected without running the eval: the Gemma 4 edge candidates (`gemma4:e2b`/`e4b`) need more memory than the target machines have, and their visual understanding is worse than the shipped `qwen3-vl:2b` for our label task. The default stays `qwen3-vl:2b`; the MLX engine speedup from Ollama 0.40 applies to it automatically. Revisit only if a smaller, better vision model appears.
 
 ### V1.5.5 macOS accessibility reliability (done 2026-11-20, pending mac CI)
 - Done: a one-second AX messaging timeout on every element we read (focused

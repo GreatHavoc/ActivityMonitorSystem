@@ -82,8 +82,10 @@ fn cap_timeout(el: &axuielement::AXUIElement) {
 fn ax_hint() {
     tracing::error!(
         "Accessibility permission missing or AX API disabled. Grant it in \
-         System Settings > Privacy & Security > Accessibility for this binary, \
-         then restart the service. Without it, only idle events are recorded."
+         System Settings > Privacy & Security > Accessibility for this binary \
+         (macOS 27.3+: approve the prompt by selecting the app from the list; \
+         re-approve if set to ask every time), then restart the service. \
+         Without it, only idle events are recorded."
     );
 }
 

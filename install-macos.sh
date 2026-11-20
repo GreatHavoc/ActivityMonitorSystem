@@ -11,6 +11,9 @@
 #     (the agent only probes it; it never installs or starts anything)
 #   - Accessibility permission for the agent binary:
 #     System Settings > Privacy & Security > Accessibility
+#     (macOS 27.3+: approve the prompt by selecting the app from the list,
+#     or add it in the Accessibility pane; "ask every time" needs a re-approve
+#     per prompt. A transparency indicator shows while the AX API is in use.)
 #     Without it the agent records idle events only (no focus text).
 set -eu
 
@@ -76,4 +79,6 @@ echo "  stop/start      : launchctl stop/start $LABEL   |   ./install-macos.sh u
 echo ""
 echo "Two manual steps make full use of it:"
 echo "  1. brew install ollama && ollama serve   (inference; model pulled per appsettings.json)"
-echo "  2. System Settings > Privacy & Security > Accessibility: add $DIR/activity-monitor-service"
+echo "  2. Grant Accessibility to $DIR/activity-monitor-service (System Settings >"
+echo "     Privacy & Security > Accessibility; on macOS 27.3+ approve the prompt by"
+echo "     selecting the app from the list). Without it only idle events are recorded."

@@ -79,9 +79,12 @@ Or just use the prebuilt `publish2\` folder.
    local runtime). If Ollama is down, monitoring continues and the log says
    what to run.
 4. Grant the agent the Accessibility permission: System Settings > Privacy &
-   Security > Accessibility, add `activity-monitor-service`. Without it the
-   service records idle events only. Screen Recording is not needed: the
-   `axtext` backend never captures the screen.
+   Security > Accessibility, add `activity-monitor-service`. On macOS 27.3+
+   you can instead approve the system prompt by selecting the app from the
+   list; if the entry is set to ask every time, approve each prompt. A
+   transparency indicator appears while the Accessibility API is in use.
+   Without the permission the service records idle events only. Screen
+   Recording is not needed: the `axtext` backend never captures the screen.
 
 Data locations on macOS: the database is
 `~/Library/Application Support/ActivityMonitor/Data/ActivityData.db` (the CLI
@@ -264,7 +267,9 @@ cargo build --release --workspace
   `qwen3-vl:2b`; connection errors fail fast (120 s timeout) and are logged.
 - Corrupt DB — stop the service, delete `Data\ActivityData.db`, restart.
 - macOS: only idle rows are recorded — the agent lacks the Accessibility
-  permission (System Settings > Privacy & Security > Accessibility). No
+  permission (System Settings > Privacy & Security > Accessibility; on macOS
+  27.3+ approve the prompt by selecting the app from the list, and re-approve
+  if it is set to ask every time). No
   inference rows — Ollama is not running (`ollama serve`) or the model is not
   pulled (`ollama pull qwen3-vl:2b`); the service log prints the exact fix.
 - macOS: app and window title recorded but the text context is empty in
