@@ -333,7 +333,7 @@ Recording and accept the visible indicator.
 
 ## v1.5 plan (drafted 2026-11-20 from tech newsletter and changelog research)
 
-Status: in progress (started 2026-11-20). No v1.5 release exists yet. Scope is trust and platform follow-through from v1.4. ScreenCaptureKit (M2), notarization (M3), cloud sync and keystroke logging stay out. Done so far: V1.5.0, V1.5.1 (jiff 1.0.1), V1.5.3 docs, V1.5.5, V1.5.6, server.json schema/description fix. Rejected: V1.5.4 model refresh. Pending on user/hardware: registry publish (V1.5.2), 27.3 smoke test (V1.5.3).
+Status: v1.5.0 released 2026-11-20. Scope is trust and platform follow-through from v1.4. ScreenCaptureKit (M2), notarization (M3), cloud sync and keystroke logging stay out. Shipped in v1.5.0: V1.5.0, V1.5.1 (jiff 1.0.1), V1.5.3 docs, V1.5.5, V1.5.6, server.json schema/description fix. Rejected: V1.5.4 model refresh. Declined: registry publish (V1.5.2). Pending on hardware: 27.3 smoke test (V1.5.3).
 
 Sources checked on 2026-11-20:
 - This Week in Rust 677 (2026-11-11) and 678 (2026-11-18): https://this-week-in-rust.org/blog/2026/11/18/this-week-in-rust-678/
@@ -354,13 +354,14 @@ Acceptance: both CI jobs green, cooldown probe line present, lint accepted, READ
 All four crates moved to jiff 1.0.1. The only breaking changes that bit: `to_zoned` renamed to `to_zoned_datetime` (8 call sites across timefmt, cli main/llm, mcp tools) and `Timestamp - Timestamp` now returns `SignedDuration`, so two `.get_seconds()` calls became `.as_secs()` (same truncating semantics). `Timestamp - std::time::Duration`, `Span`, and the "O" UTC text format are unchanged. The 3-day publish cooldown held back 1.0.1 at first; it was forced through with the documented `CARGO_RESOLVER_INCOMPATIBLE_PUBLISH_AGE=allow` override because 1.0.1 fixes an out-of-bounds timestamp parse (#714). Rollback is one pin per crate (`jiff = "0.2"`).
 Acceptance: workspace tests 75/75 green on Windows, macOS CI green, timestamp format tests (28-char "O", trailing Z) unchanged.
 
-### V1.5.2 MCP registry readiness (needs user action)
+### V1.5.2 MCP registry readiness (declined 2026-11-20, user decision)
+Metadata hygiene is done (schema 2025-12-11, 60-char description), but publishing is declined: the server stays local-only and no registry listing is wanted. Publishing would additionally need a package or a public HTTPS remote plus the user's GitHub device login, so the entry stays unpublished on purpose.
 The registry quickstart uses schema 2025-12-11, a description limit of 100 characters, and either a package with ownership verification or a publicly accessible HTTPS remote. Our `server.json` used schema 2025-10-17 and a long description, so validation would have failed; both are fixed as of 2026-11-20 (schema 2025-12-11, 61-char description). The remaining blocker is the loopback remote (`http://127.0.0.1:8765/mcp`): pick one route — publish an OCI or MCPB package, or expose a public HTTPS endpoint. Use a pinned `mcp-publisher`, run `validate`, then `login github` (device code) and `publish`. Keep the local-first stdio server unchanged.
 Acceptance: `mcp-publisher validate` passes and the listing appears under `io.github.greathavoc/activity-monitor`. Blocked until the user completes the GitHub device login and chooses the package or remote route.
 
-### V1.5.3 macOS 27.3 permission onboarding (docs done 2026-11-20, smoke test needs a real Mac)
-Apple announced on 2026-11-16 that macOS 27.3 changes permission handling: users grant access by selecting the requesting app from a list, apps can ask every time, and a transparency indicator appears. Done: `install-macos.sh`, the service log hint in `mac.rs::ax_hint`, and the README (setup step 4 and troubleshooting) now describe both the classic Accessibility pane and the 27.3 flow, and note the indicator. Denied or ask-every-time AX access already degrades to idle-only with a clear log line (v1.4 behavior, unchanged); the no-screenshots path stays.
-Acceptance remaining: smoke test on a Mac running 27.3. Blocked until one is available.
+### V1.5.3 macOS 27.3 permission onboarding (docs done, degradation tested in CI 2026-11-20)
+Apple announced on 2026-11-16 that macOS 27.3 changes permission handling: users grant access by selecting the requesting app from a list, apps can ask every time, and a transparency indicator appears. Done: `install-macos.sh`, the service log hint in `mac.rs::ax_hint`, and the README (setup step 4 and troubleshooting) now describe both the classic Accessibility pane and the 27.3 flow, and note the indicator.
+Tested without a Mac: on 27.3 an ask-every-time or denied entry fails `is_process_trusted()`, which is the same branch as "no grant" — and the macos-15 CI runner has no grant. A new unit test asserts that on that branch `current_focus()` and `focus_text()` return None (idle-only events keep flowing via CoreGraphics, no permission) and never panic or block; CI also runs `sh -n install-macos.sh`. The interactive 27.3 prompt itself still cannot be exercised headless; that one step stays manual on a real Mac.
 
 ### V1.5.4 Inference model refresh (rejected 2026-11-20, user decision)
 Rejected without running the eval: the Gemma 4 edge candidates (`gemma4:e2b`/`e4b`) need more memory than the target machines have, and their visual understanding is worse than the shipped `qwen3-vl:2b` for our label task. The default stays `qwen3-vl:2b`; the MLX engine speedup from Ollama 0.40 applies to it automatically. Revisit only if a smaller, better vision model appears.

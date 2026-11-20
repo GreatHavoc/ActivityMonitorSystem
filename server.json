@@ -3,7 +3,7 @@
   "name": "io.github.greathavoc/activity-monitor",
   "title": "Activity Monitor",
   "description": "Read-only MCP access to the local Activity Monitor database.",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "license": "MIT",
   "repository": {
     "url": "https://github.com/GreatHavoc/ActivityMonitorSystem",

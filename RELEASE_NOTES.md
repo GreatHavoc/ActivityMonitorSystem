@@ -1,5 +1,17 @@
 # Release Notes — Rust port (publish2/)
 
+## v1.5.0 (2026-11-20): reliability and housekeeping
+
+- macOS AX hang guard. Every Accessibility read on macOS is a synchronous cross-process call, so a frozen app could block the service loop. Each element we read (frontmost app, window, focused element) now gets a one-second AX messaging timeout, and the focused value plus selected text are fetched in a single call instead of two. A unit test asserts that without the Accessibility grant, focus and text return None while idle events keep flowing, which is the same branch macOS 27.3 ask-every-time hits.
+- jiff 1.0. All four crates moved from jiff 0.2 to 1.0.1. The only breakage was mechanical: `to_zoned` is now `to_zoned_datetime` (8 call sites) and `Timestamp - Timestamp` returns `SignedDuration`, so two `.get_seconds()` calls became `.as_secs()`. The "O" UTC database format and ICU report ordering are unchanged. The new 3-day publish cooldown held 1.0.1 back at first; it was pulled in with the documented override because 1.0.1 fixes an out-of-bounds timestamp parse.
+- Supply-chain hygiene. `.cargo/config.toml` sets `global-min-publish-age = "3 days"`, so `cargo update` skips crate versions younger than three days (verified: a dry run held back clap 4.6.9, published hours earlier). All four crates inherit the `unused_dependencies` cargo lint and report none. No CI downloads needed pinning; the actions are already on fixed major tags.
+- New export format. `activity-monitor-cli export --format sqlite --output backup.db` writes a consistent snapshot of the whole database via `VACUUM INTO`. `--from/--to` do not apply to it, and an existing output file is never overwritten.
+- MCP server card. `server.json` now uses schema 2025-12-11 and a 60-character description, so it passes registry validation. Publishing to the MCP registry is declined: the server stays local-only (stdio, or HTTP on 127.0.0.1).
+- macOS 27.3 onboarding text. The install script, the service log hint and the README describe the macOS 27.3 permission flow (approve by selecting the app from the list, re-approve when set to ask every time, transparency indicator while the AX API is in use) next to the classic Accessibility pane. Denied or ungranted access still degrades to idle-only events with a clear log line.
+- Documented macOS AX limit: Electron and Chromium apps (VS Code, Slack, Chrome, Edge) expose no accessibility tree until an assistive client is enabled, so on macOS they record app and window title but empty text context. Use `ExcludedProcesses` to skip them.
+- Model refresh rejected: Gemma 4 edge models need more memory than the target machines have and read screens worse than the shipped `qwen3-vl:2b`, so the default model is unchanged.
+- Tests: workspace 75/75 green on Windows. CI green on windows-latest and macos-15.
+
 ## v1.4.0 (2026-11-19): macOS support
 
 - macOS build. The workspace now compiles on macOS arm64. Sensors are split per platform: Windows keeps Win32; macOS gets idle time from CoreGraphics (`CGEventSourceSecondsSinceLastEventType`, no permission needed) and focus from the Accessibility API via the `axuielement` crate (frontmost app, window title, focused element text). DB, queue, ranking, Ollama client, CLI and MCP server were already portable and are unchanged.
